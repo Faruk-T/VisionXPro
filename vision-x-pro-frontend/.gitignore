@@ -1,0 +1,23 @@
+# --- Frontend (React/Vite) ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.local
+
+# --- Backend (.NET 8) ---
+bin/
+obj/
+/TestResults/
+*.user
+*.userosscache
+*.sln.docstates
+# appsettings.json dosyasını şifrelerin için korumaya alıyoruz
+appsettings.Development.json
+
+# --- Editor & OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

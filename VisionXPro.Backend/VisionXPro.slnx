@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="VisionXPro.Api/VisionXPro.Api.csproj" />
+  <Project Path="VisionXPro.Application/VisionXPro.Application.csproj" />
+  <Project Path="VisionXPro.Domain/VisionXPro.Domain.csproj" />
+  <Project Path="VisionXPro.Infrastructure/VisionXPro.Infrastructure.csproj" />
+  <Project Path="VisionXPro.Persistence/VisionXPro.Persistence.csproj" />
+</Solution>

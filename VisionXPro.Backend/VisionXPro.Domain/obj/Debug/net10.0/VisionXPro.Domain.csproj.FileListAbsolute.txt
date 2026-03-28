@@ -1,0 +1,11 @@
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\bin\Debug\net10.0\VisionXPro.Domain.deps.json
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\bin\Debug\net10.0\VisionXPro.Domain.dll
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\bin\Debug\net10.0\VisionXPro.Domain.pdb
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\obj\Debug\net10.0\VisionXPro.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\obj\Debug\net10.0\VisionXPro.Domain.AssemblyInfoInputs.cache
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\obj\Debug\net10.0\VisionXPro.Domain.AssemblyInfo.cs
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\obj\Debug\net10.0\VisionXPro.Domain.csproj.CoreCompileInputs.cache
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\obj\Debug\net10.0\VisionXPro.Domain.dll
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\obj\Debug\net10.0\refint\VisionXPro.Domain.dll
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\obj\Debug\net10.0\VisionXPro.Domain.pdb
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Domain\obj\Debug\net10.0\ref\VisionXPro.Domain.dll
