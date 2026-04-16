@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -9,58 +9,6 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-// Optik CRM Mock Verisi
-const defaultMockCustomers = [
-  // ... existing mockCustomers items internally defined
-  {
-    id: 'C-001',
-    name: 'Aslıhan Demir',
-    phone: '+90 532 987 65 43',
-    email: 'asli.demir@example.com',
-    status: 'VIP',
-    lastVisit: '10 Mar 2026',
-    totalSpent: 12450.00,
-    address: 'Moda Cad. No:12 D:4 Kadıköy/İstanbul',
-    prescriptions: [
-      { id: 'RX-9921', date: '10 Mar 2026', doctor: 'Dr. Ahmet Yılmaz', clinic: 'Acıbadem Göz', right: { sph: '-2.00', cyl: '-1.00', axis: '90' }, left: { sph: '-2.25', cyl: '-0.75', axis: '85' } }
-    ],
-    pastOrders: [
-      { id: 'TR-1029', date: '10 Mar 2026', product: 'Ray-Ban RB3447', amount: 3500 },
-      { id: 'TR-0881', date: '05 Eki 2025', product: 'Acuvue Oasys 1-Day (2 Kutu)', amount: 1120 }
-    ]
-  },
-  {
-    id: 'C-002',
-    name: 'Caner Öz',
-    phone: '+90 544 555 44 33',
-    email: 'caner.oz@mail.com',
-    status: 'Standart',
-    lastVisit: '22 Şub 2026',
-    totalSpent: 850.00,
-    address: 'Dikmen Cad. No:190 Çankaya/Ankara',
-    prescriptions: [],
-    pastOrders: [
-      { id: 'TR-0982', date: '22 Şub 2026', product: 'Air Optix Night&Day', amount: 850 }
-    ]
-  },
-  {
-    id: 'C-003',
-    name: 'Mehmet Ali Yücel',
-    phone: '+90 533 222 11 00',
-    email: 'm.ali.yucel@ismail.com',
-    status: 'Riskli',
-    lastVisit: '15 Oca 2025',
-    totalSpent: 4200.00,
-    address: 'Güzeloba Mah. Lara/Antalya',
-    prescriptions: [
-      { id: 'RX-8822', date: '15 Oca 2025', doctor: 'Dr. Elif Gözde', clinic: 'Lara Hastanesi', right: { sph: '+1.50', cyl: '', axis: '' }, left: { sph: '+1.25', cyl: '', axis: '' } }
-    ],
-    pastOrders: [
-      { id: 'TR-0411', date: '15 Oca 2025', product: 'Persol PO3092SM', amount: 4200 }
-    ]
-  }
-];
-
 const segmentConfig: any = {
   'VIP': { color: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200', icon: Star },
   'Standart': { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: User },
@@ -69,13 +17,34 @@ const segmentConfig: any = {
 
 export default function Customers() {
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState(defaultMockCustomers);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [activeSegment, setActiveSegment] = useState('Tümü');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', address: '' });
+  const [loading, setLoading] = useState(true);
+
+  const fetchCustomers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:5069/api/customers', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setCustomers(await res.json());
+      }
+    } catch(err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   const segments = ['Tümü', 'VIP', 'Standart', 'Riskli'];
 
@@ -138,13 +107,17 @@ export default function Customers() {
       <div className="flex-1 overflow-x-hidden overflow-y-auto px-6 lg:px-10 pb-10">
          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             <AnimatePresence>
-               {filtered.length === 0 ? (
+               {loading ? (
+                 <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
+                    <span className="text-lg font-bold text-slate-500 animate-pulse">Kayıtlı hastalar aranıyor...</span>
+                 </div>
+               ) : filtered.length === 0 ? (
                  <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
                     <Users className="w-16 h-16 mb-4 text-slate-300" />
                     <p className="text-lg font-bold text-slate-500">Müşteri kaydı bulunamadı.</p>
                  </div>
-               ) : filtered.map((c, i) => {
-                 const SegIcon = segmentConfig[c.status].icon;
+               ) : filtered.map((c: any, i: number) => {
+                 const SegIcon = segmentConfig[c.status]?.icon || segmentConfig['Standart'].icon;
                  return (
                    <motion.div 
                      layout
@@ -169,9 +142,9 @@ export default function Customers() {
                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{c.id}</span>
                          </div>
                        </div>
-                       <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-center ${segmentConfig[c.status].color}`}>
-                          <SegIcon className="w-4 h-4" />
-                       </div>
+                        <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-center ${segmentConfig[c.status]?.color || segmentConfig['Standart'].color}`}>
+                          {SegIcon && <SegIcon className="w-4 h-4" />}
+                        </div>
                      </div>
 
                      <div className="space-y-3 mb-6">
@@ -418,28 +391,34 @@ export default function Customers() {
                  <div className="p-6 bg-white border-t border-slate-100 flex justify-end gap-3">
                     <button onClick={() => setIsAddModalOpen(false)} className="px-5 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">İptal</button>
                     <button 
-                      onClick={() => {
+                      onClick={async () => {
                         if(!newCustomer.name || !newCustomer.phone) {
                           toast.error('Lütfen en az Ad Soyad ve Telefon bilgisini giriniz.');
                           return;
                         }
-                        const newId = `C-00${customers.length + 1}`;
-                        const customerToAdd = {
-                          id: newId,
-                          name: newCustomer.name,
-                          phone: newCustomer.phone,
-                          email: newCustomer.email,
-                          address: newCustomer.address,
-                          status: 'Standart',
-                          totalSpent: 0,
-                          lastVisit: 'Bugün',
-                          prescriptions: [],
-                          pastOrders: []
-                        };
-                        setCustomers([customerToAdd, ...customers]);
-                        setIsAddModalOpen(false);
-                        setNewCustomer({ name: '', phone: '', email: '', address: '' });
-                        toast.success(`${newCustomer.name} başarıyla kaydedildi.`);
+                        try {
+                           const token = localStorage.getItem('token');
+                           const res = await fetch('http://localhost:5069/api/customers', {
+                             method: 'POST',
+                             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                             body: JSON.stringify({
+                               name: newCustomer.name,
+                               phone: newCustomer.phone,
+                               email: newCustomer.email,
+                               address: newCustomer.address
+                             })
+                           });
+                           if (res.ok) {
+                             toast.success(`${newCustomer.name} başarıyla kaydedildi.`);
+                             setIsAddModalOpen(false);
+                             setNewCustomer({ name: '', phone: '', email: '', address: '' });
+                             fetchCustomers();
+                           } else {
+                             toast.error('Kayıt başarısız.');
+                           }
+                        } catch(err) {
+                           toast.error('Bağlantı hatası.');
+                        }
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center gap-2 transition-all"
                     >

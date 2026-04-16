@@ -13,3 +13,4 @@ C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Application\o
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Application\obj\Debug\net10.0\refint\VisionXPro.Application.dll
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Application\obj\Debug\net10.0\VisionXPro.Application.pdb
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Application\obj\Debug\net10.0\ref\VisionXPro.Application.dll
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Application\obj\Debug\net10.0\VisionXPro.Application.sourcelink.json

@@ -17,3 +17,4 @@ C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Persistence\o
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Persistence\obj\Debug\net10.0\VisionXPro.Persistence.pdb
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Persistence\obj\Debug\net10.0\VisionXPro.Persistence.genruntimeconfig.cache
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Persistence\obj\Debug\net10.0\ref\VisionXPro.Persistence.dll
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Persistence\obj\Debug\net10.0\VisionXPro.Persistence.sourcelink.json

@@ -131,6 +131,43 @@ namespace VisionXPro.Api.Controllers
 
             return Ok(summary);
         }
+
+        [HttpGet("all")]
+        public async Task<IActionResult> GetAllOrders()
+        {
+            var orgId = _tenantService.GetOrganizationId();
+            var branchId = _tenantService.GetBranchId();
+
+            if (branchId == null) return BadRequest();
+
+            var orders = await _context.Orders
+                .Where(o => o.OrganizationId == orgId && o.BranchId == branchId.Value)
+                .OrderByDescending(o => o.CreatedAt)
+                .Select(o => new
+                {
+                    id = o.OrderNumber,
+                    customer = o.CustomerId == Guid.Empty ? "Kayıtsız Müşteri" : "Müşteri Adı", // Not storing customer nav yet but returning string for front
+                    phone = "-",
+                    date = o.CreatedAt.ToString("dd MMM yyyy, HH:mm"),
+                    status = o.Status,
+                    amount = o.TotalAmount,
+                    paymentMethod = _context.Transactions.Where(t => t.OrderId == o.Id).Select(t => t.PaymentMethod).FirstOrDefault() ?? "Bilinmiyor",
+                    address = "Mağaza Teslim",
+                    items = _context.OrderItems
+                        .Where(oi => oi.OrderId == o.Id)
+                        .Select(oi => new { 
+                            name = _context.Products.Where(p => p.Id == oi.ProductId).Select(p => p.Name).FirstOrDefault(),
+                            attr = "",
+                            price = oi.UnitPrice,
+                            qty = oi.Quantity
+                        }).ToList(),
+                    prescriptionImg = false
+                })
+                .ToListAsync();
+
+            return Ok(orders);
+        }
+
         [HttpGet("finance")]
         public async Task<IActionResult> GetFinanceSummary()
         {

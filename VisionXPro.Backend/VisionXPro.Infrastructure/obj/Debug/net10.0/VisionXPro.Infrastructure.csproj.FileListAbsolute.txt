@@ -15,3 +15,4 @@ C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Infrastructur
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Infrastructure\obj\Debug\net10.0\refint\VisionXPro.Infrastructure.dll
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Infrastructure\obj\Debug\net10.0\VisionXPro.Infrastructure.pdb
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Infrastructure\obj\Debug\net10.0\ref\VisionXPro.Infrastructure.dll
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Infrastructure\obj\Debug\net10.0\VisionXPro.Infrastructure.sourcelink.json

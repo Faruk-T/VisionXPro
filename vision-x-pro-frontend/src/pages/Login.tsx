@@ -93,7 +93,7 @@ export default function Login() {
           branchId: data.branchId
         };
         login(data.token, userPayload);
-        navigate('/');
+        navigate('/dashboard');
       } else {
         const errorData = await res.json();
         alert('Giriş başarısız: ' + (errorData.message || 'Geçersiz bilgiler'));

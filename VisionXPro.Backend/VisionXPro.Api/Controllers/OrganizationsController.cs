@@ -27,10 +27,20 @@ namespace VisionXPro.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateShopWithOwner([FromBody] CreateOrgRequest request)
         {
-            // Use transaction to ensure Organization, Branch, and User are created atomically
+            // Atomik işlem garantisi için Transaction başlatıyoruz
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // 1. Önce veri tabanında 'ShopOwner' rolünün olup olmadığını kontrol ediyoruz
+                var shopOwnerRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "ShopOwner");
+                
+                if (shopOwnerRole == null)
+                {
+                    // Eğer rol yoksa işlemi durduruyoruz
+                    return BadRequest(new { message = "Sistem hatası: 'ShopOwner' rolü veri tabanında bulunamadı. Lütfen rolleri kontrol edin." });
+                }
+
+                // 2. Organizasyonu (Mağazayı) oluşturuyoruz
                 var org = new Organization
                 {
                     Name = request.Name,
@@ -43,8 +53,9 @@ namespace VisionXPro.Api.Controllers
                 };
 
                 _context.Organizations.Add(org);
-                await _context.SaveChangesAsync(); // Save to get the Org Id
+                await _context.SaveChangesAsync(); // Org Id oluşması için kaydediyoruz
 
+                // 3. Varsayılan Şubeyi oluşturuyoruz
                 var mainBranch = new Branch
                 {
                     Name = "Merkez Şube",
@@ -53,32 +64,43 @@ namespace VisionXPro.Api.Controllers
                 };
 
                 _context.Branches.Add(mainBranch);
-                await _context.SaveChangesAsync(); // Save to get the Branch Id
+                await _context.SaveChangesAsync(); // Branch Id oluşması için kaydediyoruz
 
+                // 4. Mağaza Sahibini (Admin) oluşturuyoruz
                 var adminUser = new User
                 {
                     FullName = "Shop Admin",
                     Email = request.AdminEmail,
                     OrganizationId = org.Id,
                     BranchId = mainBranch.Id,
+                    RoleId = shopOwnerRole.Id, // Az önce bulduğumuz Rol ID'yi buraya atıyoruz
                     Role = "ShopOwner",
                     IsActive = true
                 };
 
-                // Hash the provided password securely
+                // Şifreyi güvenli şekilde hash'liyoruz
                 adminUser.PasswordHash = _passwordHasher.HashPassword(adminUser, request.AdminPassword);
 
                 _context.Users.Add(adminUser);
                 await _context.SaveChangesAsync();
 
+                _context.AuditLogs.Add(new AuditLog {
+                    TableName = "Organizations",
+                    Action = $"Yeni Mağaza Eklendi: {org.Name}",
+                    Timestamp = DateTime.UtcNow
+                });
+                await _context.SaveChangesAsync();
+
+                // Her şey yolundaysa tüm işlemleri onaylıyoruz
                 await transaction.CommitAsync();
 
-                return Ok(new { message = "Organization, branch and owner user created successfully.", orgId = org.Id });
+                return Ok(new { message = "Organizasyon, şube ve yönetici hesabı başarıyla oluşturuldu.", orgId = org.Id });
             }
             catch (Exception ex)
             {
+                // Hata oluşursa yapılan tüm değişiklikleri geri alıyoruz
                 await transaction.RollbackAsync();
-                return StatusCode(500, new { message = "Bir hata oluştu", details = ex.Message });
+                return StatusCode(500, new { message = "Mağaza oluşturulurken bir sunucu hatası oluştu.", details = ex.Message });
             }
         }
 
@@ -105,6 +127,7 @@ namespace VisionXPro.Api.Controllers
         public async Task<IActionResult> GetAllOrganizations()
         {
             var organizations = await _context.Organizations
+                .Where(o => !o.IsDeleted)
                 .Select(o => new {
                     o.Id,
                     o.Name,
@@ -149,6 +172,7 @@ namespace VisionXPro.Api.Controllers
 
             return Ok(new { message = "Lisans başarıyla güncellendi." });
         }
+
         [HttpPut("{orgId}/users/{userId}/reset-password")]
         public async Task<IActionResult> ResetUserPassword(Guid orgId, Guid userId, [FromBody] ResetPasswordRequest request)
         {
@@ -160,10 +184,72 @@ namespace VisionXPro.Api.Controllers
 
             return Ok(new { message = "Şifre başarıyla güncellendi." });
         }
+
+        [HttpDelete("{orgId}")]
+        public async Task<IActionResult> DeleteOrganization(Guid orgId)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var org = await _context.Organizations.FindAsync(orgId);
+                if (org == null || org.IsDeleted)
+                    return NotFound(new { message = "Mağaza bulunamadı veya zaten silinmiş." });
+
+                // 1. Soft delete the organization
+                org.IsDeleted = true;
+                org.IsActive = false;
+
+                // 2. Soft delete all associated branches
+                var branches = await _context.Branches.Where(b => b.OrganizationId == orgId && !b.IsDeleted).ToListAsync();
+                foreach (var branch in branches)
+                {
+                    branch.IsDeleted = true;
+                }
+
+                // 3. Deactivate and soft delete all associated users preventing them from logging in
+                var users = await _context.Users.Where(u => u.OrganizationId == orgId && !u.IsDeleted).ToListAsync();
+                foreach (var user in users)
+                {
+                    user.IsActive = false;
+                    user.IsDeleted = true;
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new { success = true, message = "Mağaza ve tüm kullanıcıları sistemden başarıyla silindi (Soft Delete)." });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new { message = "Mağaza silinirken sunucu tarafında bir hata oluştu.", details = ex.Message });
+            }
+        }
+
+        [HttpGet("{orgId}/dashboard-stats")]
+        public async Task<IActionResult> GetOrgDashboardStats(Guid orgId)
+        {
+            var org = await _context.Organizations.FindAsync(orgId);
+            if (org == null) return NotFound(new { message = "Girdiğiniz mağaza bulunamadı." });
+
+            var totalOrders = await _context.Orders.Where(o => o.OrganizationId == orgId && !o.IsDeleted).CountAsync();
+            var totalRevenue = await _context.Orders.Where(o => o.OrganizationId == orgId && !o.IsDeleted).SumAsync(o => o.TotalAmount);
+            var totalProducts = await _context.InventoryItems.Where(i => i.OrganizationId == orgId).SumAsync(i => i.Quantity);
+            var activeAppointments = await _context.Appointments.Where(a => a.OrganizationId == orgId && !a.IsDeleted && a.AppointmentDate >= DateTime.UtcNow).CountAsync();
+
+            return Ok(new {
+                OrganizationName = org.Name,
+                TotalOrders = totalOrders,
+                TotalRevenue = totalRevenue,
+                TotalStock = totalProducts,
+                ActiveAppointments = activeAppointments
+            });
+        }
     }
 
-    public class CreateOrgRequest
+    // --- DTO (Data Transfer Object) Tanımları ---
 
+    public class CreateOrgRequest
     {
         public string Name { get; set; } = string.Empty;
         public string? TaxNumber { get; set; }

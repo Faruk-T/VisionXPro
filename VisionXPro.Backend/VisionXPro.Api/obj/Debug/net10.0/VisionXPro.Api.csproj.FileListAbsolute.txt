@@ -168,3 +168,5 @@ C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Api\obj\Debug
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Api\obj\Debug\net10.0\VisionXPro.Api.genruntimeconfig.cache
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Api\obj\Debug\net10.0\ref\VisionXPro.Api.dll
 C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Api\obj\Debug\net10.0\VisionXPro.Api.sourcelink.json
+C:\Users\user\Desktop\Optics-Project\VisionXPro.Backend\VisionXPro.Api\bin\Debug\net10.0\system_config.json

@@ -56,6 +56,16 @@ using (var scope = app.Services.CreateScope())
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     context.Database.Migrate();
 
+    var rolesToSeed = new[] { "SuperAdmin", "ShopOwner", "Customer" };
+    foreach (var roleName in rolesToSeed)
+    {
+        if (!context.Roles.Any(r => r.Name == roleName))
+        {
+            context.Roles.Add(new VisionXPro.Domain.Entities.Role { Id = Guid.NewGuid(), Name = roleName });
+            context.SaveChanges();
+        }
+    }
+
     if (!context.Organizations.Any(o => o.Name == "Vision X System"))
     {
         var sysOrg = new VisionXPro.Domain.Entities.Organization { Id = Guid.NewGuid(), Name = "Vision X System", SubscriptionPlan = "System", IsActive = true };

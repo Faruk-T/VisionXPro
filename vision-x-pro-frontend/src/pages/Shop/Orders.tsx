@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Package, Search, Filter,
@@ -8,74 +8,8 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const mockOrders = [
-  {
-    id: 'TR-10842',
-    customer: 'Ahmet Yılmaz',
-    phone: '+90 532 123 45 67',
-    date: '24 Mar 2026, 14:30',
-    status: 'Yeni Sipariş',
-    amount: 3450.00,
-    paymentMethod: 'Kredi Kartı',
-    address: 'Atatürk Mah. İstiklal Cad. No:42 D:5 Kadıköy/İstanbul',
-    items: [
-      { name: 'Ray-Ban RB3025 Aviator', attr: 'Altın Çerçeve / Yeşil Cam', price: 2850.00, qty: 1, type: 'sunglass' },
-      { name: 'Essilor Crizal Tek Odaklı Cam', attr: 'Sağ: SPH -1.00 / Sol: SPH -1.25', price: 600.00, qty: 1, type: 'lens', rx: {
-        right: { sph: '-1.00', cyl: '', axis: '' },
-        left: { sph: '-1.25', cyl: '', axis: '' }
-      }}
-    ],
-    prescriptionImg: true
-  },
-  {
-    id: 'TR-10841',
-    customer: 'Zeynep Kaya',
-    phone: '+90 555 987 65 43',
-    date: '24 Mar 2026, 11:15',
-    status: 'Hazırlanıyor',
-    amount: 1120.00,
-    paymentMethod: 'Havale / EFT',
-    address: 'Cumhuriyet Mah. 1923 Sok. No:19 Çankaya/Ankara',
-    items: [
-      { name: 'Acuvue Oasys 1-Day (Kutu)', attr: 'Sağ: SPH -2.50 CYL -0.75 AX 180', price: 560.00, qty: 2, type: 'contact', rx: {
-        right: { sph: '-2.50', cyl: '-0.75', axis: '180' },
-        left: { sph: '-2.50', cyl: '-0.75', axis: '180' }
-      }}
-    ],
-    prescriptionImg: false
-  },
-  {
-    id: 'TR-10839',
-    customer: 'Can Özkan',
-    phone: '+90 544 555 66 77',
-    date: '23 Mar 2026, 16:45',
-    status: 'Kargolandı',
-    amount: 4800.00,
-    paymentMethod: 'Kredi Kartı',
-    address: 'Güzelyalı Mah. Sahil Blv. No:120 Konak/İzmir',
-    trackingNo: 'YRT839201938',
-    items: [
-      { name: 'Tom Ford TF5584', attr: 'Siyah Optik Çerçeve', price: 4800.00, qty: 1, type: 'frame' }
-    ],
-    prescriptionImg: false
-  },
-  {
-    id: 'TR-10830',
-    customer: 'Elif Demir',
-    phone: '+90 530 111 22 33',
-    date: '22 Mar 2026, 09:10',
-    status: 'Teslim Edildi',
-    amount: 950.00,
-    paymentMethod: 'Kredi Kartı',
-    address: 'Nilüfer OSB. Ihlamur Cad. No:8 Bursa',
-    items: [
-      { name: 'Air Optix Plus Hydraglyde', attr: 'SPH -3.00', price: 950.00, qty: 1, type: 'contact' }
-    ],
-    prescriptionImg: true
-  }
-];
-
 const statusConfig: any = {
+  'Tamamlandı': { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
   'Yeni Sipariş': { color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
   'Hazırlanıyor': { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Focus },
   'Kargolandı': { color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Truck },
@@ -87,12 +21,35 @@ export default function Orders() {
   const [activeTab, setActiveTab] = useState('Tümü');
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const tabs = ['Tümü', 'Yeni Sipariş', 'Hazırlanıyor', 'Kargolandı', 'Teslim Edildi'];
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('http://localhost:5069/api/orders/all', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+           setOrders(await res.json());
+        } else {
+           setOrders([]);
+        }
+      } catch (err) {
+        console.error("Siparişler çekilemedi", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+  }, []);
 
-  const filteredOrders = mockOrders.filter(o => {
+  const tabs = ['Tümü', 'Tamamlandı', 'Yeni Sipariş', 'Hazırlanıyor', 'Kargolandı'];
+
+  const filteredOrders = orders.filter(o => {
     if (activeTab !== 'Tümü' && o.status !== activeTab) return false;
-    if (search && !o.customer.toLowerCase().includes(search.toLowerCase()) && !o.id.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !o.customer?.toLowerCase().includes(search.toLowerCase()) && !o.id?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
@@ -142,15 +99,19 @@ export default function Orders() {
 
       {/* ORDER LIST GRID */}
       <div className="flex-1 overflow-x-hidden overflow-y-auto px-6 lg:px-10 pb-10">
-         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             <AnimatePresence>
-               {filteredOrders.length === 0 ? (
+               {loading ? (
+                 <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
+                    <span className="text-lg font-bold text-slate-500 animate-pulse">Siparişler yükleniyor...</span>
+                 </div>
+               ) : filteredOrders.length === 0 ? (
                  <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
                     <AlertCircle className="w-16 h-16 mb-4 text-slate-300" />
                     <p className="text-lg font-bold text-slate-500">Bu kritere uygun sipariş bulunamadı.</p>
                  </div>
-               ) : filteredOrders.map((order, i) => {
-                 const StatusIcon = statusConfig[order.status].icon;
+               ) : filteredOrders.map((order: any, i: number) => {
+                 const StatusIcon = statusConfig[order.status]?.icon;
                  return (
                    <motion.div 
                      layout
@@ -170,8 +131,8 @@ export default function Orders() {
                           </span>
                           <h3 className="text-xl font-black text-slate-800 group-hover:text-indigo-600 transition-colors">{order.customer}</h3>
                         </div>
-                        <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-bold ${statusConfig[order.status].color}`}>
-                          <StatusIcon className="w-4 h-4" /> {order.status}
+                        <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-bold ${statusConfig[order.status]?.color || 'bg-slate-100 text-slate-600'}`}>
+                          {StatusIcon && <StatusIcon className="w-4 h-4" />} {order.status}
                         </div>
                      </div>
 
@@ -228,7 +189,7 @@ export default function Orders() {
                    <div>
                      <div className="flex items-center gap-3 mb-2">
                        <span className="text-sm font-extrabold text-slate-400 uppercase tracking-widest">{selectedOrder.id}</span>
-                       <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold ${statusConfig[selectedOrder.status].color}`}>
+                       <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold ${statusConfig[selectedOrder.status]?.color}`}>
                          {selectedOrder.status}
                        </span>
                      </div>

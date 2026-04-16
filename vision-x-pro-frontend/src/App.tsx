@@ -9,25 +9,21 @@ import { Glasses } from 'lucide-react';
 
 import AdminOrganizations from './pages/Admin/Organizations';
 import AdminSettings from './pages/Admin/Settings';
+import AdminDashboard from './pages/Admin/AdminDashboard';
 import PointOfSale from './pages/Shop/PointOfSale';
 import Inventory from './pages/Shop/Inventory';
 import Appointments from './pages/Shop/Appointments';
 import Finance from './pages/Shop/Finance';
 import Orders from './pages/Shop/Orders';
 import Customers from './pages/Shop/Customers';
+import Settings from './pages/Shop/Settings';
+import Labels from './pages/Shop/Labels';
 
-function Dashboard() {
-  const user = useAuthStore((state) => state.user);
-  return (
-    <div className="border-4 border-dashed border-gray-200 rounded-2xl h-96 flex flex-col items-center justify-center bg-white space-y-4 shadow-sm">
-      <h2 className="text-2xl font-bold text-gray-700">Hoş Geldiniz, {user?.fullName}!</h2>
-      <p className="text-gray-500 text-lg">Rolünüz: <span className="font-semibold px-3 py-1 bg-blue-100 text-blue-700 rounded-full">{user?.role}</span></p>
-      <p className="text-gray-400 text-sm">Modüller yükleniyor...</p>
-    </div>
-  );
-}
+import Dashboard from './pages/Shop/Dashboard';
 
-// Admin components are now imported from pages/Admin
+import PublicLayout from './components/Public/PublicLayout';
+import Home from './pages/Public/Home';
+import Stores from './pages/Public/Stores';
 
 // Admin components are now imported from pages/Admin
 
@@ -35,8 +31,8 @@ function MainLayout() {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
-  const isPos = location.pathname === '/pos';
-  const isInventory = location.pathname === '/inventory';
+  const isPos = location.pathname === '/dashboard/pos';
+  const isInventory = location.pathname === '/dashboard/inventory';
   const noPadding = isPos || isInventory;
 
   return (
@@ -70,6 +66,13 @@ function MainLayout() {
   );
 }
 
+const RoleBasedDashboard = () => {
+  const user = useAuthStore((state) => state.user);
+  if (user?.role === 'SuperAdmin') return <AdminDashboard />;
+  if (user?.role === 'ShopOwner') return <Dashboard />;
+  return <Dashboard />;
+};
+
 function App() {
   return (
     <BrowserRouter>
@@ -77,32 +80,40 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
         
+        {/* Public Routes */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/stores" element={<Stores />} />
+        </Route>
+
         {/* All authenticated users */}
         <Route element={<ProtectedRoutes />}>
-          <Route element={<MainLayout />}>
-            <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<MainLayout />}>
+            <Route index element={<RoleBasedDashboard />} />
             
             {/* SuperAdmin Only */}
             <Route element={<ProtectedRoutes allowedRoles={['SuperAdmin']} />}>
-              <Route path="/admin/organizations" element={<AdminOrganizations />} />
-              <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="admin/organizations" element={<AdminOrganizations />} />
+              <Route path="admin/settings" element={<AdminSettings />} />
             </Route>
             
             {/* ShopOwner Only */}
             <Route element={<ProtectedRoutes allowedRoles={['ShopOwner']} />}>
-              <Route path="/pos" element={<PointOfSale />} />
-              <Route path="/sales" element={<Finance />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/customers" element={<Customers />} />
-              <Route path="/finance" element={<Finance />} />
-              <Route path="/inventory" element={<Inventory />} />
-              <Route path="/appointments" element={<Appointments />} />
+              <Route path="pos" element={<PointOfSale />} />
+              <Route path="sales" element={<Finance />} />
+              <Route path="orders" element={<Orders />} />
+              <Route path="customers" element={<Customers />} />
+              <Route path="finance" element={<Finance />} />
+              <Route path="inventory" element={<Inventory />} />
+              <Route path="appointments" element={<Appointments />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="labels" element={<Labels />} />
             </Route>
 
             {/* Customer Only */}
             <Route element={<ProtectedRoutes allowedRoles={['Customer']} />}>
-              <Route path="/my-prescriptions" element={<div>Reçetelerim Yapım Aşamasında</div>} />
-              <Route path="/my-appointments" element={<div>Randevularım Yapım Aşamasında</div>} />
+              <Route path="my-prescriptions" element={<div>Reçetelerim Yapım Aşamasında</div>} />
+              <Route path="my-appointments" element={<div>Randevularım Yapım Aşamasında</div>} />
             </Route>
           </Route>
         </Route>

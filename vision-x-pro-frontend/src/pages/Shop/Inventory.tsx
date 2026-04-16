@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   PackageSearch, Plus, 
-  Search, Filter, Edit, Box, X, Sparkles, ArrowUpRight, ArrowDownRight, Layers
+  Search, Filter, Edit, Box, X, Sparkles, Layers,
+  LayoutGrid, List, Eye, ArrowUpRight, ArrowDownRight, Glasses, Droplets, Gem
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -13,6 +14,8 @@ export default function Inventory() {
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [activeCategory, setActiveCategory] = useState('Tümü');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -105,210 +108,293 @@ export default function Inventory() {
     }
   };
 
-  const filteredItems = inventoryItems.filter(item => 
-    item.name?.toLowerCase().includes(search.toLowerCase()) || 
-    item.barcode?.toLowerCase().includes(search.toLowerCase()) ||
-    item.brand?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredItems = inventoryItems.filter(item => {
+    const matchesSearch = item.name?.toLowerCase().includes(search.toLowerCase()) || 
+                          item.barcode?.toLowerCase().includes(search.toLowerCase()) ||
+                          item.brand?.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = activeCategory === 'Tümü' || item.category === activeCategory;
+    return matchesSearch && matchesCategory;
+  });
 
-  const tableVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.05 } }
+  const categories = ['Tümü', 'Çerçeve', 'Cam', 'Lens', 'Aksesuar'];
+
+  const getCategoryIcon = (cat: string) => {
+    switch (cat) {
+      case 'Çerçeve': return <Glasses className="w-5 h-5 text-indigo-500" />;
+      case 'Lens': return <Droplets className="w-5 h-5 text-cyan-500" />;
+      case 'Aksesuar': return <Gem className="w-5 h-5 text-amber-500" />;
+      case 'Cam': return <Eye className="w-5 h-5 text-emerald-500" />;
+      default: return <Box className="w-5 h-5 text-slate-400" />;
+    }
   };
 
-  const rowVariants = {
-    hidden: { opacity: 0, y: 5 },
-    visible: { opacity: 1, y: 0 }
+  const getCategoryBg = (cat: string) => {
+    switch (cat) {
+      case 'Çerçeve': return 'bg-indigo-50 text-indigo-700';
+      case 'Lens': return 'bg-cyan-50 text-cyan-700';
+      case 'Aksesuar': return 'bg-amber-50 text-amber-700';
+      case 'Cam': return 'bg-emerald-50 text-emerald-700';
+      default: return 'bg-slate-50 text-slate-700';
+    }
   };
 
   return (
-    <div className="min-h-[calc(100vh-80px)] p-6 lg:p-8 relative overflow-hidden bg-gradient-to-br from-[#E0EAFC] via-[#CFDEF3] to-[#A1C4FD] flex flex-col font-sans">
+    <div className="min-h-full bg-[#FAFAFA] font-sans pb-16">
       <Toaster position="top-right"/>
       
-      {/* VIBRANT LIGHT AMBIENT GLOWS - VisionOS style background */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[70%] bg-gradient-to-bl from-pink-300/60 via-purple-300/40 to-indigo-300/60 rounded-full blur-[120px] mix-blend-multiply opacity-80"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[60%] bg-gradient-to-tr from-cyan-300/50 to-emerald-200/40 rounded-full blur-[140px] mix-blend-multiply opacity-80"></div>
-        <div className="absolute top-[30%] left-[20%] w-[40%] h-[40%] bg-gradient-to-tr from-amber-200/40 to-rose-200/40 rounded-full blur-[140px] mix-blend-multiply opacity-60"></div>
-      </div>
-
-      <div className="relative z-10 mx-auto w-full max-w-[1600px] h-full flex flex-col gap-8">
+      {/* Light Clean Header Section */}
+      <div className="bg-white border-b border-slate-200/60 pt-8 pb-10 px-8 xl:px-12 relative overflow-hidden">
+        {/* Subtle decorative blob */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-slate-100 to-transparent rounded-full blur-3xl opacity-50 pointer-events-none -z-10"></div>
         
-        {/* HEADER SECTION */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end bg-white/40 backdrop-blur-3xl p-8 rounded-[2rem] border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)]">
-          <div className="mb-6 md:mb-0">
-            <div className="inline-flex items-center justify-center px-4 py-1.5 mb-4 rounded-full bg-white/50 text-indigo-700 text-[10px] font-black tracking-widest uppercase border border-white/60 shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 mr-1.5 text-indigo-500" /> VisionOS Panel
+        <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-start md:items-end gap-6 relative z-10">
+          <div>
+            <div className="inline-flex items-center justify-center px-3 py-1.5 mb-4 rounded-xl bg-slate-100 text-slate-600 text-[10px] font-bold tracking-widest uppercase shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+              Depo ve Mağaza
             </div>
-            <h1 className="text-4xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-              Katalog & Stok
+            <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight flex items-center gap-3">
+              Katalog <span className="text-slate-300 font-light">&</span> Stok
             </h1>
-            <p className="text-indigo-900/60 mt-2 font-bold text-sm">Gelişmiş optik barkod sistemiyle tam veri senkronizasyonu.</p>
+            <p className="text-slate-500 mt-2 font-medium text-sm">Ürün yelpazenizi, stok maliyetlerinizi ve perakende satış fiyatlarınızı yönetin.</p>
           </div>
           
-          <div className="flex gap-4 w-full md:w-auto">
-             <motion.button onClick={() => toast('Filtreleme seçenekleri aktif değil.')} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-white/50 backdrop-blur-md border border-white/60 shadow-sm rounded-2xl text-sm font-bold text-indigo-900 hover:bg-white/80 transition-all">
-               <Filter className="w-4 h-4" /> Filtreler
-             </motion.button>
-             <motion.button onClick={handleOpenAdd} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }} className="flex-[2] md:flex-none flex items-center justify-center gap-2 px-8 py-4 bg-indigo-600/90 backdrop-blur-md shadow-[0_8px_20px_rgba(79,70,229,0.3)] rounded-2xl text-sm font-black text-white border border-indigo-400/30 hover:bg-indigo-700 hover:shadow-[0_12px_25px_rgba(79,70,229,0.4)] transition-all">
-               <Plus className="w-5 h-5" /> Yeni Ürün Ekle
-             </motion.button>
+          <div className="flex gap-3 w-full md:w-auto">
+             <button onClick={() => toast('Toplu içe aktarma yakında eklenecek.')} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3.5 bg-white border border-slate-200 shadow-sm rounded-2xl text-sm font-bold text-slate-700 hover:bg-slate-50 hover:shadow-md transition-all">
+               İçe Aktar
+             </button>
+             <button onClick={handleOpenAdd} className="flex-[2] md:flex-none flex items-center justify-center gap-2 px-7 py-3.5 bg-slate-800 shadow-lg shadow-slate-200 rounded-2xl text-sm font-bold text-white hover:bg-slate-900 transition-all active:scale-95">
+               <Plus className="w-4 h-4" /> Yeni Ürün Ekle
+             </button>
           </div>
         </div>
+      </div>
 
+      <div className="max-w-[1600px] mx-auto px-8 xl:px-12 mt-8 flex flex-col gap-8">
+        
         {/* METRICS WIDGETS */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-           <StatCard icon={<Layers className="text-indigo-500 w-6 h-6"/>} title="Toplam Çeşit" value={inventoryItems.length.toString()} trend="Model ve Renk" bg="bg-white/60" border="border-white/50" />
-           <StatCard icon={<PackageSearch className="text-pink-500 w-6 h-6"/>} title="Fiziksel Adet" value={inventoryItems.reduce((acc, curr) => acc + curr.quantity, 0).toString()} trend="Canlı Sayım" bg="bg-white/60" border="border-white/50" />
-           <StatCard icon={<ArrowDownRight className="text-emerald-500 w-6 h-6"/>} title="Stok Maliyeti" value={`₺${inventoryItems.reduce((acc, curr) => acc + (parseFloat(curr.purchasePrice) * curr.quantity || 0), 0).toLocaleString('tr-TR', {minimumFractionDigits:2})}`} trend="Genel Toplam" bg="bg-white/60" border="border-white/50" />
-           <StatCard icon={<ArrowUpRight className="text-blue-500 w-6 h-6"/>} title="Satış Hedefi" value={`₺${inventoryItems.reduce((acc, curr) => acc + (parseFloat(curr.salePrice) * curr.quantity || 0), 0).toLocaleString('tr-TR', {minimumFractionDigits:2})}`} trend="Beklenen Gelir" bg="bg-white/60" border="border-white/50" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+           <StatCard icon={<Layers className="text-indigo-600 w-5 h-5"/>} title="Toplam Çeşit" value={inventoryItems.length.toString()} bg="bg-white" />
+           <StatCard icon={<PackageSearch className="text-rose-500 w-5 h-5"/>} title="Fiziksel Adet" value={inventoryItems.reduce((acc, curr) => acc + curr.quantity, 0).toString()} bg="bg-white" />
+           <StatCard icon={<ArrowDownRight className="text-slate-500 w-5 h-5"/>} title="Stok Maliyeti" value={`₺${inventoryItems.reduce((acc, curr) => acc + (parseFloat(curr.purchasePrice) * curr.quantity || 0), 0).toLocaleString('tr-TR', {minimumFractionDigits:2})}`} bg="bg-white" />
+           <StatCard icon={<ArrowUpRight className="text-emerald-500 w-5 h-5"/>} title="Satış Hedefi" value={`₺${inventoryItems.reduce((acc, curr) => acc + (parseFloat(curr.salePrice) * curr.quantity || 0), 0).toLocaleString('tr-TR', {minimumFractionDigits:2})}`} bg="bg-white" />
         </div>
 
-        {/* INVENTORY TABLE PANEL */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_12px_40px_rgba(0,0,0,0.06)] rounded-[2.5rem] p-6 lg:p-8 flex flex-col relative overflow-hidden">
+        {/* TOOLBAR */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-3 flex flex-col xl:flex-row justify-between items-center gap-4 shadow-sm">
            
-           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-              <div className="relative group w-full max-w-lg">
-                <Search className="absolute left-5 top-4 w-5 h-5 text-indigo-900/50 group-focus-within:text-indigo-600 transition-colors" />
+           {/* Category Pills */}
+           <div className="flex gap-2 overflow-x-auto w-full xl:w-auto scrollbar-hide">
+              {categories.map(cat => (
+                 <button 
+                   key={cat} 
+                   onClick={() => setActiveCategory(cat)}
+                   className={`px-5 py-2.5 rounded-2xl text-sm font-bold whitespace-nowrap transition-all ${activeCategory === cat ? 'bg-slate-800 text-white shadow-md' : 'bg-transparent text-slate-500 hover:bg-slate-100'}`}
+                 >
+                   {cat}
+                 </button>
+              ))}
+           </div>
+
+           <div className="flex items-center gap-3 w-full xl:w-auto">
+              <div className="relative group flex-1 xl:w-80">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                 <input 
                   type="text" 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Barkod, İsim veya Marka ara..." 
-                  className="w-full bg-white/60 backdrop-blur-md border border-white/60 py-4 pl-14 pr-6 rounded-2xl text-[14px] font-bold text-slate-800 placeholder:text-indigo-900/40 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm" 
+                  placeholder="Barkod, İsim..." 
+                  className="w-full bg-slate-50 border border-slate-200 py-3 pl-11 pr-4 rounded-xl text-sm font-semibold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white focus:border-indigo-300 transition-all" 
                 />
               </div>
-              <div className="text-sm font-bold text-indigo-900/70 bg-white/50 backdrop-blur-md px-5 py-3 rounded-xl border border-white/60 flex items-center gap-2 shadow-sm">
-                 <Box className="w-4 h-4 text-indigo-400"/>
-                 <span className="text-indigo-700 font-black">{filteredItems.length}</span> Ürün Listeleniyor
+
+              <div className="flex bg-slate-100 p-1 rounded-xl">
+                 <button onClick={() => setViewMode('grid')} className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                    <LayoutGrid className="w-5 h-5"/>
+                 </button>
+                 <button onClick={() => setViewMode('list')} className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                    <List className="w-5 h-5"/>
+                 </button>
               </div>
            </div>
+        </div>
 
-           <div className="flex-1 bg-white/40 border border-white/60 rounded-[2rem] overflow-hidden flex flex-col shadow-inner backdrop-blur-sm">
-             <div className="overflow-x-auto scrollbar-hide flex-1">
-               <table className="w-full text-left text-sm text-slate-700">
-                 <thead className="bg-white/50 backdrop-blur-md text-indigo-900/60 font-black uppercase tracking-widest text-[10px] border-b border-white/40">
-                   <tr>
-                     <th className="px-8 py-5">Barkod Kodu / UTS</th>
-                     <th className="px-8 py-5">Ürün Modeli & Kategori</th>
-                     <th className="px-8 py-5 text-right border-l border-white/40">Alış Fiyatı</th>
-                     <th className="px-8 py-5 text-right">Satış Fiyatı</th>
-                     <th className="px-8 py-5 text-center border-l border-white/40">Stok</th>
-                     <th className="px-8 py-5 text-center">İşlem</th>
-                   </tr>
-                 </thead>
-                 <motion.tbody variants={tableVariants} initial="hidden" animate="visible" className="divide-y divide-white/40">
-                   {loading ? (
-                     <tr><td colSpan={6} className="text-center py-20 font-bold text-indigo-900/50">SQL Veritabanı Taranıyor...</td></tr>
-                   ) : filteredItems.length === 0 ? (
-                     <tr><td colSpan={6} className="text-center py-20 font-bold text-indigo-900/50 flex flex-col items-center justify-center gap-4">
-                        <Box className="w-12 h-12 text-indigo-300"/>
-                        Aranan kriterlerde ürün yok.
-                     </td></tr>
-                   ) : (
-                     filteredItems.map((item) => (
-                       <motion.tr variants={rowVariants} key={item.id} className="hover:bg-white/60 transition-colors group">
+        {/* INVENTORY VIEWS */}
+        <AnimatePresence mode="wait">
+           {loading ? (
+             <div className="py-32 flex justify-center text-slate-400 font-bold">SQL Veritabanı Taranıyor...</div>
+           ) : filteredItems.length === 0 ? (
+             <div className="py-24 flex flex-col items-center justify-center bg-white border border-slate-200 border-dashed rounded-3xl text-slate-400">
+               <PackageSearch className="w-16 h-16 mb-4 text-slate-200" />
+               <p className="text-xl font-extrabold text-slate-500 mb-2">Gösterilecek ürün yok.</p>
+               <p className="text-sm font-medium">Arama kriterlerini değiştirin veya yeni ürün ekleyin.</p>
+             </div>
+           ) : viewMode === 'grid' ? (
+             
+             /* GRID VIEW */
+             <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} exit={{opacity: 0}} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredItems.map(item => (
+                  <div key={item.id} className="bg-white rounded-[2rem] p-6 border border-slate-200/70 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all group flex flex-col">
+                     <div className="flex justify-between items-start mb-6">
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${getCategoryBg(item.category)}`}>
+                           {getCategoryIcon(item.category)}
+                        </div>
+                        <div className="flex flex-col items-end">
+                           <span className="font-mono text-xs font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">{item.barcode}</span>
+                           {item.utsCode && <span className="text-[9px] font-black tracking-widest text-indigo-400 uppercase mt-2">{item.utsCode}</span>}
+                        </div>
+                     </div>
+                     
+                     <div className="mb-4">
+                        <h3 className="font-extrabold text-slate-800 text-lg leading-tight mb-1">{item.name}</h3>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{item.brand || 'Markasız'} • {item.category}</p>
+                     </div>
+
+                     <div className="mt-auto grid grid-cols-2 gap-4 pb-4 border-b border-slate-100">
+                        <div>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Maliyet</p>
+                           <p className="font-black text-slate-600">₺{(parseFloat(item.purchasePrice) || 0).toLocaleString('tr-TR')}</p>
+                        </div>
+                        <div className="text-right">
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Satış</p>
+                           <p className="font-black text-emerald-600">₺{(parseFloat(item.salePrice) || 0).toLocaleString('tr-TR')}</p>
+                        </div>
+                     </div>
+
+                     <div className="flex justify-between items-center mt-5">
+                        <div className={`px-3 py-1.5 rounded-xl text-xs font-black border flex items-center gap-1.5 ${item.quantity > 0 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                           <Box className="w-3.5 h-3.5" /> {item.quantity} Adet
+                        </div>
+                        <button onClick={() => handleOpenEdit(item)} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-800 hover:text-white flex items-center justify-center transition-colors shadow-sm">
+                           <Edit className="w-4 h-4"/>
+                        </button>
+                     </div>
+                  </div>
+                ))}
+             </motion.div>
+
+           ) : (
+             
+             /* LIST VIEW */
+             <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} exit={{opacity: 0}} className="bg-white rounded-[2rem] border border-slate-200/70 shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
+               <div className="overflow-x-auto">
+                 <table className="w-full text-left text-sm text-slate-700">
+                   <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                     <tr>
+                       <th className="px-8 py-5"># Barkod / ÜTS</th>
+                       <th className="px-8 py-5">Ürün Modeli & Kategori</th>
+                       <th className="px-8 py-5 text-right">Alış Fiyatı</th>
+                       <th className="px-8 py-5 text-right">Satış Fiyatı</th>
+                       <th className="px-8 py-5 text-center">Stok</th>
+                       <th className="px-8 py-5 text-center">İşlem</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-50">
+                     {filteredItems.map(item => (
+                       <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
                          <td className="px-8 py-5">
-                           <div className="font-black text-slate-800 tracking-wider font-mono bg-white/70 shadow-sm inline-block px-3 py-1.5 rounded-lg border border-white">{item.barcode}</div>
-                           <br/>
-                           {item.utsCode ? <div className="text-[9px] font-black text-purple-700 bg-purple-100 inline-block px-2 py-0.5 rounded mt-2 border border-purple-200 shadow-sm">{item.utsCode}</div> : <></>}
+                           <div className="font-mono font-bold text-slate-600 text-xs bg-slate-100 inline-block px-2 py-1 rounded-md">{item.barcode}</div>
+                           {item.utsCode && <div className="text-[9px] font-black text-indigo-400 mt-2">{item.utsCode}</div>}
                          </td>
                          <td className="px-8 py-5">
-                           <div className="font-black text-slate-800 text-base">{item.name}</div>
-                           <div className="text-[11px] font-bold text-slate-500 mt-1 uppercase tracking-widest">{item.brand || 'MARKASIZ'} <span className="text-indigo-200 mx-1">•</span> {item.category}</div>
+                           <div className="flex items-center gap-4">
+                             <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${getCategoryBg(item.category)}`}>
+                               {getCategoryIcon(item.category)}
+                             </div>
+                             <div>
+                               <div className="font-black text-slate-800">{item.name}</div>
+                               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{item.brand || 'MARKASIZ'}</div>
+                             </div>
+                           </div>
                          </td>
-                         <td className="px-8 py-5 font-bold text-slate-500 text-right border-l border-white/30 border-dashed">₺{(parseFloat(item.purchasePrice) || 0).toLocaleString('tr-TR', {minimumFractionDigits:2})}</td>
-                         <td className="px-8 py-5 font-black text-indigo-700 text-right">₺{(parseFloat(item.salePrice) || 0).toLocaleString('tr-TR', {minimumFractionDigits:2})}</td>
-                         <td className="px-8 py-5 text-center border-l border-white/30 border-dashed">
-                           <div className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black shadow-sm border ${item.quantity > 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-200/50' : 'bg-rose-50 text-rose-600 border-rose-200/50 shadow-[0_2px_10px_rgba(225,29,72,0.15)]'}`}>
+                         <td className="px-8 py-5 font-bold text-slate-500 text-right text-xs">₺{(parseFloat(item.purchasePrice) || 0).toLocaleString('tr-TR', {minimumFractionDigits:2})}</td>
+                         <td className="px-8 py-5 font-black text-slate-800 text-right text-sm">₺{(parseFloat(item.salePrice) || 0).toLocaleString('tr-TR', {minimumFractionDigits:2})}</td>
+                         <td className="px-8 py-5 text-center">
+                           <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black ${item.quantity > 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-rose-50 text-rose-600'}`}>
                              {item.quantity} 
-                             <span className="text-[10px] font-bold opacity-70">ADET</span>
                            </div>
                          </td>
                          <td className="px-8 py-5 text-center">
-                            <button onClick={() => handleOpenEdit(item)} className="p-3 text-indigo-400 hover:text-indigo-700 hover:bg-white/80 rounded-2xl transition-all border border-transparent shadow-sm hover:border-white hover:shadow-md" title="Düzenle">
-                               <Edit className="w-4 h-4"/>
+                            <button onClick={() => handleOpenEdit(item)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-200 rounded-xl transition-all" title="Düzenle">
+                               <Edit className="w-5 h-5"/>
                             </button>
                          </td>
-                       </motion.tr>
-                     ))
-                   )}
-                 </motion.tbody>
-               </table>
-             </div>
-           </div>
-        </motion.div>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             </motion.div>
+           )}
+        </AnimatePresence>
       </div>
 
-      {/* LIGHT FLUID MODAL - VisionOS Glass */}
+      {/* LIGHT FLUID MODAL - Pure White Apple Style */}
       <AnimatePresence>
         {isModalOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            
-            {/* Darker backdrop blur overlay */}
-            <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-xl" onClick={() => setIsModalOpen(false)}></div>
-            
-            <motion.div initial={{ scale: 0.95, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 30 }} className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl overflow-hidden border border-white/80 relative z-10 flex flex-col">
-              <div className="flex justify-between items-center p-8 bg-white/40 border-b border-white/50 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl"></div>
+            <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+            <motion.div initial={{ scale: 0.95, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 30 }} className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden relative z-10 flex flex-col border border-slate-100">
+              
+              <div className="flex justify-between items-center p-8 bg-slate-50 border-b border-slate-100">
                 <div>
-                  <h3 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                     <PackageSearch className="w-6 h-6 text-indigo-600"/>
-                     {modalMode === 'add' ? 'Merkezi Kayıt Cihazı' : 'Envanter Güncelleme'}
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                     <PackageSearch className="w-5 h-5 text-indigo-600"/>
+                     {modalMode === 'add' ? 'Kataloğa Ürün Ekle' : 'Envanter Güncelleme'}
                   </h3>
-                  <p className="text-indigo-900/60 text-sm font-semibold mt-1">Barkod veya manuel giriş ile SQL senkronizasyonu.</p>
+                  <p className="text-slate-500 text-xs font-semibold mt-1">Barkod veya manuel giriş ile cihaz kaydını tamamlayın.</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-2xl bg-white/60 text-slate-500 hover:text-slate-900 border border-white shadow-sm flex items-center justify-center transition-colors relative z-10"><X className="w-5 h-5"/></button>
+                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-2xl bg-white text-slate-400 hover:text-slate-800 hover:shadow shadow-sm flex items-center justify-center transition-all"><X className="w-5 h-5"/></button>
               </div>
-              <form onSubmit={handleSubmit} className="p-8 flex flex-col gap-6 relative z-10">
+
+              <form onSubmit={handleSubmit} className="p-8 flex flex-col gap-6">
                 <div className="grid grid-cols-2 gap-6">
                    <div>
-                     <label className="text-[10px] font-black tracking-widest text-indigo-900/50 uppercase mb-2 block">Cihaz Barkodu</label>
-                     <input required type="text" value={formData.barcode} onChange={e=>setFormData({...formData, barcode: e.target.value})} className="w-full text-base font-black py-4 px-5 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 border border-white/60 bg-white/50 text-slate-800 transition-all font-mono shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]" placeholder="Barkod Okutunuz..." />
+                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Cihaz Barkodu</label>
+                     <input required type="text" value={formData.barcode} onChange={e=>setFormData({...formData, barcode: e.target.value})} className="w-full text-sm font-bold py-3.5 px-4 rounded-xl outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 border border-slate-200 bg-white text-slate-800 transition-all font-mono" placeholder="Barkod Okutunuz..." />
                    </div>
                    <div>
-                     <label className="text-[10px] font-black tracking-widest text-indigo-900/50 uppercase mb-2 block">ÜTS Kayıt No</label>
-                     <input type="text" value={formData.utsCode} onChange={e=>setFormData({...formData, utsCode: e.target.value})} className="w-full text-base font-black py-4 px-5 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 border border-white/60 bg-white/50 text-slate-800 transition-all font-mono shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]" placeholder="Opsiyonel"/>
+                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">ÜTS Kayıt No</label>
+                     <input type="text" value={formData.utsCode} onChange={e=>setFormData({...formData, utsCode: e.target.value})} className="w-full text-sm font-bold py-3.5 px-4 rounded-xl outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 border border-slate-200 bg-white text-slate-800 transition-all font-mono" placeholder="Opsiyonel"/>
                    </div>
                 </div>
                 <div>
-                   <label className="text-[10px] font-black tracking-widest text-indigo-900/50 uppercase mb-2 block">Mavi/Katalog İsmi</label>
-                   <input required type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full text-lg font-black py-4 px-5 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 border border-white/60 bg-white/70 text-slate-800 transition-all placeholder:text-slate-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]" placeholder="Örn: Ray-Ban Hexagonal Gold"/>
+                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Model / Katalog İsmi</label>
+                   <input required type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full text-base font-black py-4 px-5 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-300 border border-slate-200 bg-slate-50 text-slate-800 transition-all placeholder:text-slate-300" placeholder="Örn: Ray-Ban Hexagonal Gold"/>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-6">
                    <div>
-                     <label className="text-[10px] font-black tracking-widest text-indigo-900/50 uppercase mb-2 block">Kategori Seçimi</label>
-                     <select value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})} className="w-full text-base font-bold py-4 px-5 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 border border-white/60 bg-white/50 text-slate-700 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
+                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Kategori Seçimi</label>
+                     <select value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})} className="w-full text-sm font-bold py-4 px-4 rounded-xl outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 border border-slate-200 bg-white text-slate-700 transition-all">
                        <option>Çerçeve</option><option>Cam</option><option>Lens</option><option>Aksesuar</option>
                      </select>
                    </div>
                    <div>
-                     <label className="text-[10px] font-black tracking-widest text-indigo-900/50 uppercase mb-2 block">Marka / Klasman</label>
-                     <input type="text" value={formData.brand} onChange={e=>setFormData({...formData, brand: e.target.value})} className="w-full text-base font-bold py-4 px-5 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 border border-white/60 bg-white/50 text-slate-700 transition-all placeholder:text-slate-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]" placeholder="Örn: Ray-Ban"/>
+                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Marka / Klasman</label>
+                     <input type="text" value={formData.brand} onChange={e=>setFormData({...formData, brand: e.target.value})} className="w-full text-sm font-bold py-4 px-4 rounded-xl outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 border border-slate-200 bg-white text-slate-700 transition-all placeholder:text-slate-300" placeholder="Örn: Ray-Ban"/>
                    </div>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-6 bg-white/30 p-6 rounded-[2rem] border border-white/60 mt-2 shadow-[inset_0_2px_10px_rgba(0,0,0,0.01)]">
+                <div className="grid grid-cols-3 gap-6 bg-slate-50 p-6 rounded-[1.5rem] border border-slate-100 mt-2">
                    <div>
-                     <label className="text-[10px] font-black tracking-widest text-rose-500 uppercase mb-2 block">Maliyet (₺)</label>
-                     <input required type="number" step="0.01" value={formData.purchasePrice} onChange={e=>setFormData({...formData, purchasePrice: e.target.value})} className="w-full text-lg font-black py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-rose-500/30 border border-white bg-white/80 text-rose-700 transition-all shadow-sm" />
+                     <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Maliyet (₺)</label>
+                     <input required type="number" step="0.01" value={formData.purchasePrice} onChange={e=>setFormData({...formData, purchasePrice: e.target.value})} className="w-full text-base font-black py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-slate-200 border border-slate-200 bg-white text-slate-600 transition-all" />
                    </div>
                    <div>
-                     <label className="text-[10px] font-black tracking-widest text-indigo-600 uppercase mb-2 block">Tüketici (₺)</label>
-                     <input required type="number" step="0.01" value={formData.salePrice} onChange={e=>setFormData({...formData, salePrice: e.target.value})} className="w-full text-lg font-black py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/30 border border-white bg-white/80 text-indigo-800 transition-all shadow-sm" />
+                     <label className="text-[10px] font-black tracking-widest text-indigo-500 uppercase mb-2 block">Perakende Fiyat (₺)</label>
+                     <input required type="number" step="0.01" value={formData.salePrice} onChange={e=>setFormData({...formData, salePrice: e.target.value})} className="w-full text-base font-black py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-200 border border-indigo-200 bg-white text-indigo-600 transition-all shadow-sm" />
                    </div>
                    <div>
-                     <label className="text-[10px] font-black tracking-widest text-emerald-600 uppercase mb-2 block">Sistem Stok</label>
-                     <input required type="number" min="0" value={formData.quantity} onChange={e=>setFormData({...formData, quantity: parseInt(e.target.value)})} disabled={modalMode === 'edit'} className="w-full text-lg font-black py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/30 border border-white bg-white/80 text-emerald-700 disabled:opacity-40 transition-all shadow-sm" />
+                     <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Sistem Stok</label>
+                     <input required type="number" min="0" value={formData.quantity} onChange={e=>setFormData({...formData, quantity: parseInt(e.target.value)})} disabled={modalMode === 'edit'} className="w-full text-base font-black py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-slate-200 border border-slate-200 bg-white text-slate-600 disabled:opacity-50 transition-all" />
                    </div>
                 </div>
 
-                <div className="mt-4 flex gap-4 pt-4 border-t border-white/40">
-                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-4 flex-1 text-sm font-black text-slate-600 bg-white/50 hover:bg-white border border-white rounded-2xl transition-all shadow-sm">Vazgeç</button>
-                   <button type="submit" className="px-6 py-4 flex-[2] bg-indigo-600 shadow-[0_4px_15px_rgba(79,70,229,0.3)] hover:shadow-[0_8px_25px_rgba(79,70,229,0.4)] hover:-translate-y-0.5 text-white text-sm font-black rounded-2xl transition-all flex items-center justify-center gap-2 border border-indigo-500/50">
-                      <Sparkles className="w-4 h-4" />
-                      {modalMode === 'add' ? 'Güvenli Kaydet' : 'Değişiklikleri Onayla'}
+                <div className="mt-4 flex gap-4 pt-4 border-t border-slate-100">
+                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-4 flex-1 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">Vazgeç</button>
+                   <button type="submit" className="px-6 py-4 flex-[2] bg-slate-800 shadow-[0_4px_15px_rgba(0,0,0,0.1)] hover:shadow-lg hover:-translate-y-0.5 text-white text-sm font-black rounded-xl transition-all flex items-center justify-center gap-2">
+                      <Sparkles className="w-4 h-4 text-indigo-400" />
+                      {modalMode === 'add' ? 'Sisteme Ekle' : 'Değişiklikleri Onayla'}
                    </button>
                 </div>
               </form>
@@ -320,21 +406,18 @@ export default function Inventory() {
   );
 }
 
-function StatCard({ icon, title, value, trend, bg, border }: any) {
+function StatCard({ icon, title, value, bg }: any) {
   return (
-    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className={`${bg} backdrop-blur-2xl border ${border} shadow-[0_8px_30px_rgba(0,0,0,0.04)] rounded-3xl p-6 lg:p-7 flex flex-col relative overflow-hidden group hover:bg-white/80 transition-colors`}>
+    <div className={`${bg} border border-slate-200/70 shadow-[0_4px_20px_rgba(0,0,0,0.02)] rounded-3xl p-6 relative overflow-hidden group hover:border-slate-300 transition-all`}>
       <div className="flex justify-between items-start mb-4">
-        <div className={`w-12 h-12 bg-white/80 border border-white shadow-sm rounded-2xl flex items-center justify-center`}>
+        <div className="w-12 h-12 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center text-slate-600">
           {icon}
-        </div>
-        <div className={`px-2.5 py-1 rounded-lg bg-white/60 border border-white text-[9px] font-black text-indigo-900/60 uppercase tracking-widest shadow-sm`}>
-          {trend}
         </div>
       </div>
       <div>
-        <p className="text-xs font-black text-indigo-900/50 uppercase tracking-widest mb-1">{title}</p>
-        <h3 className="text-3xl font-black text-slate-800 group-hover:scale-105 transform origin-left transition-transform">{value}</h3>
+        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</p>
+        <h3 className="text-3xl font-extrabold text-slate-800">{value}</h3>
       </div>
-    </motion.div>
+    </div>
   );
 }

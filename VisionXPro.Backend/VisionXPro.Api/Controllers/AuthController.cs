@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 using VisionXPro.Application.DTOs;
 using VisionXPro.Application.Interfaces;
@@ -50,7 +52,32 @@ namespace VisionXPro.Api.Controllers
             if (!user.IsActive)
                 return BadRequest(new { message = "User is not active" });
 
+            // Bakım Modu Kontrolü
+            if (user.Role != "SuperAdmin")
+            {
+                var _configFilePath = "system_config.json";
+                if (System.IO.File.Exists(_configFilePath))
+                {
+                    var json = await System.IO.File.ReadAllTextAsync(_configFilePath);
+                    var config = JsonSerializer.Deserialize<SettingsController.SystemConfig>(json);
+                    
+                    if (config != null && config.MaintenanceMode)
+                    {
+                        return BadRequest(new { message = "Sistem şu an bakım modundadır. Genel müdürlük dışında erişim kapatılmıştır." });
+                    }
+                }
+            }
+
             var token = _jwtProvider.GenerateToken(user);
+
+            // Log security event
+            _context.AuditLogs.Add(new AuditLog {
+                UserId = user.Id,
+                TableName = "SystemAuth",
+                Action = $"Kullanıcı Girişi: {user.Role}",
+                Timestamp = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
 
             var response = new AuthResponse
             {
