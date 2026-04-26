@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VisionXPro.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+925a03fbdc1123585c61dc6bcd561d8c68f7d3a0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+214958f02b476a246348ef45566c9142dadf1ac9")]
 [assembly: System.Reflection.AssemblyProductAttribute("VisionXPro.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VisionXPro.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
