@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
-  Building2, TrendingUp, Package, Users, Calendar, Wallet, 
-  ChevronDown, Search, ArrowUpRight, BarChart3, ShieldCheck
+  Building2, TrendingUp, Package, Calendar, Wallet, 
+  ChevronDown, BarChart3, ShieldCheck
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { api } from '../../lib/api';
 
 export default function AdminDashboard() {
   const [organizations, setOrganizations] = useState<any[]>([]);
@@ -20,20 +21,11 @@ export default function AdminDashboard() {
     { name: 'Mayıs', ciro: 4890 }, { name: 'Haziran', ciro: 6390 },
   ];
 
-  const getAuthHeader = () => {
-    const token = localStorage.getItem('token');
-    return { 'Authorization': `Bearer ${token}` };
-  };
-
   useEffect(() => {
     const fetchOrganizations = async () => {
       try {
-        const res = await fetch('http://localhost:5069/api/organizations', { headers: getAuthHeader() });
-        if (res.ok) {
-          const data = await res.json();
-          // Filter to show only active / non-system orgs if preferred, returning all for now
-          setOrganizations(data);
-        }
+        const data = await api.get<any[]>('/admin/organizations');
+        setOrganizations(data);
       } catch(err) {
         toast.error('Bağlantı hatası.');
       }
@@ -47,28 +39,29 @@ export default function AdminDashboard() {
       if (selectedOrgId === 'all') {
          // Show global stats
          try {
-            const statsRes = await fetch('http://localhost:5069/api/organizations/stats', { headers: getAuthHeader() });
-            if (statsRes.ok) {
-               const data = await statsRes.json();
-               setOrgStats({
-                  organizationName: 'Global Sistem Özeti',
-                  totalRevenue: 245000, // Demo mock
-                  totalOrders: 1450,    // Demo mock
-                  totalStock: 5000,     // Demo mock
-                  activeAppointments: data.totalCustomers // Demo mock
-               });
-            }
+            const data = await api.get<any>('/admin/dashboard-stats');
+            setOrgStats({
+               organizationName: 'Global Sistem Özeti',
+               totalRevenue: data.monthlyRevenue || 245000,
+               totalOrders: data.totalShops || 1450,
+               totalStock: data.totalUsers || 5000,
+               activeAppointments: data.totalCustomers
+            });
          } catch(e) {}
       } else {
          // Fetch specific org details
          try {
-            const res = await fetch(`http://localhost:5069/api/organizations/${selectedOrgId}/dashboard-stats`, { headers: getAuthHeader() });
-            if (res.ok) {
-               setOrgStats(await res.json());
-            } else {
-               toast.error('Kurum verisi alınamadı.');
-            }
-         } catch(e) {}
+            const data = await api.get<any>(`/admin/organizations/${selectedOrgId}/dashboard-stats`);
+            setOrgStats({
+               organizationName: data.organizationName,
+               totalRevenue: data.totalRevenue || 0,
+               totalOrders: data.totalOrders || 0,
+               totalStock: data.totalStock || 0,
+               activeAppointments: data.activeAppointments || 0
+            });
+         } catch(e) {
+            toast.error('Kurum verisi alınamadı.');
+         }
       }
       setLoading(false);
     };

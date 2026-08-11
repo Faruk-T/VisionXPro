@@ -3,9 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Wallet, TrendingUp, ArrowUpRight, 
   ArrowDownRight, CreditCard, Banknote, Download,
-  PieChart as PieChartIcon, RefreshCw, X, Activity, Landmark
+  PieChart as PieChartIcon, RefreshCw, X, Activity, Landmark, FileText
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import api from '../../lib/api';
+import { downloadCsv } from '../../utils/csvExport';
 
 export default function Finance() {
   const [data, setData] = useState<any>(null);
@@ -16,17 +18,16 @@ export default function Finance() {
   const fetchFinanceData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5069/api/orders/finance', {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const [summary, weekly] = await Promise.all([
+        api.get('/finance/daily-summary'),
+        api.get('/finance/weekly-chart')
+      ]);
+      setData({
+        ...summary,
+        weeklyRevenue: weekly
       });
-      if (res.ok) {
-        setData(await res.json());
-      } else {
-        toast.error("Finans verileri alınamadı.");
-      }
-    } catch (err) {
-      toast.error("Sunucuya bağlanılamadı.");
+    } catch (err: any) {
+      toast.error(err.message || "Finans verileri alınamadı.");
     } finally {
       setLoading(false);
     }
@@ -51,7 +52,7 @@ export default function Finance() {
     );
   }
 
-  const { cashVault = 0, cardVault = 0, transferVault = 0, totalRevenue = 0, averageCart = 0, recentTransactions = [], weeklyRevenue = [] } = data || {};
+  const { cashVault = 0, cardVault = 0, transferVault = 0, sgkVault = 0, totalRevenue = 0, averageCart = 0, recentTransactions = [], weeklyRevenue = [] } = data || {};
 
   // For the chart modal, reverse the array if backend sends it newest first, but backend sent it oldest first since we loop 6 down to 0. Wait, backend loops `i = 6 down to 0` with `date.AddDays(-i)`, so it's oldest first. Perfect.
 
@@ -143,11 +144,63 @@ export default function Finance() {
              />
              <VaultCard 
                delay={0.5} title="Banka Havale / EFT" value={transferVault} 
-               icon={<Landmark className="w-8 h-8 text-purple-600" />} 
+               icon={<RefreshCw className="w-8 h-8 text-purple-600" />} 
                bg="bg-gradient-to-br from-purple-50 to-fuchsia-100" 
                borderColor="border-purple-200" 
                textColor="text-purple-900" 
              />
+             <VaultCard 
+               delay={0.6} title="Bekleyen SGK Alacağı" value={sgkVault} 
+               icon={<Landmark className="w-8 h-8 text-rose-600" />} 
+               bg="bg-gradient-to-br from-rose-50 to-pink-100" 
+               borderColor="border-rose-200" 
+               textColor="text-rose-900" 
+             />
+          </div>
+        </div>
+
+        {/* Satış Tahsilatları — Madde 24 */}
+        <div>
+          <h3 className="text-xl font-extrabold text-slate-800 mb-6 flex items-center gap-3">
+            <FileText className="w-6 h-6 text-indigo-600" /> Günlük Satış Tahsilatları
+          </h3>
+          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white ring-1 ring-slate-900/5 shadow-xl shadow-slate-200/50 overflow-hidden">
+            {recentTransactions.filter((t: any) => t.desc === 'Satış Tahsilatı').length === 0 ? (
+              <div className="py-16 text-center text-slate-400 font-medium">Bugün henüz tahsilat kaydı yok.</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {recentTransactions.filter((t: any) => t.desc === 'Satış Tahsilatı').slice(0, 10).map((tx: any) => (
+                  <div key={tx.id} className="p-5 md:p-6 flex items-center justify-between gap-4 hover:bg-indigo-50/30 transition-colors">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                        {tx.method === 'Nakit' ? <Banknote className="w-6 h-6"/> : <CreditCard className="w-6 h-6"/>}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-black text-slate-800 text-lg truncate">{tx.customerName || 'Kayıtsız Müşteri'}</h4>
+                        <p className="text-sm font-semibold text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                          <span>{tx.method}</span>
+                          <span className="text-slate-300">•</span>
+                          <span>{tx.time}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <span className="hidden sm:inline-flex px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-black uppercase tracking-wider border border-indigo-100">
+                        Sorumlu: {tx.salesRep || 'Belirtilmedi'}
+                      </span>
+                      <p className="text-xl font-black text-emerald-600">{formatCurrency(tx.amount)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {recentTransactions.length > 0 && (
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button onClick={() => setShowTransactionsModal(true)} className="text-sm font-bold text-indigo-600 hover:text-indigo-800">
+                  Tüm hareketleri gör →
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -177,10 +230,19 @@ export default function Finance() {
                              {tx.type === 'income' ? <ArrowDownRight className="w-7 h-7"/> : <ArrowUpRight className="w-7 h-7"/>}
                           </div>
                           <div>
-                             <h4 className="font-bold text-slate-800 text-lg group-hover:text-indigo-700 transition-colors">{tx.desc}</h4>
-                             <p className="text-xs font-bold text-slate-400 mt-1 flex items-center gap-1.5 uppercase tracking-widest">
-                                {tx.method === 'Nakit' ? <Banknote className="w-3.5 h-3.5"/> : <CreditCard className="w-3.5 h-3.5"/>} {tx.method} • <span className="text-slate-300">|</span> {tx.time}
+                             <h4 className="font-bold text-slate-800 text-lg group-hover:text-indigo-700 transition-colors">{tx.customerName || 'Kayıtsız Müşteri'}</h4>
+                             <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-2 uppercase tracking-widest">
+                                {tx.method === 'Nakit' ? <Banknote className="w-3.5 h-3.5"/> : <CreditCard className="w-3.5 h-3.5"/>} {tx.method} 
+                                <span className="text-slate-300">|</span> {tx.time}
                              </p>
+                             <div className="mt-2 flex items-center gap-2 flex-wrap">
+                               <span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-md text-[10px] font-black uppercase tracking-wider border border-indigo-100">
+                                 Satış Sorumlusu: {tx.salesRep || 'Belirtilmedi'}
+                               </span>
+                               <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold uppercase tracking-wider border border-slate-200">
+                                 {tx.desc}
+                               </span>
+                             </div>
                           </div>
                        </div>
                        <div className="text-right">
@@ -191,9 +253,17 @@ export default function Finance() {
                     </div>
                   ))}
                </div>
-               <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-                  <button className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 shadow-sm rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors">
+               <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                  <button onClick={() => {
+                     downloadCsv('finans_hareketleri.csv',
+                       ['Tarih', 'İşlem', 'Müşteri', 'Satış Sorumlusu', 'Yöntem', 'Tutar'],
+                       recentTransactions.map((t: any) => [t.time, t.desc, t.customerName, t.salesRep, t.method, t.amount])
+                     );
+                  }} className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 shadow-sm rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors">
                      <Download className="w-4 h-4"/> Excel'e Aktar
+                  </button>
+                  <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white shadow-sm rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors">
+                     <FileText className="w-4 h-4"/> Z-Raporu Çıkar
                   </button>
                </div>
             </motion.div>

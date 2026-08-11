@@ -31,6 +31,9 @@ namespace VisionXPro.Persistence.Migrations
                     b.Property<DateTime>("AppointmentDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("AppointmentType")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid>("BranchId")
                         .HasColumnType("uniqueidentifier");
 
@@ -45,6 +48,9 @@ namespace VisionXPro.Persistence.Migrations
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AssignedStaffName")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -104,6 +110,9 @@ namespace VisionXPro.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("District")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("GlNCode")
                         .HasColumnType("nvarchar(max)");
 
@@ -160,6 +169,14 @@ namespace VisionXPro.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Segment")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Source")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -232,8 +249,27 @@ namespace VisionXPro.Persistence.Migrations
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("PaidAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<Guid?>("PrescriptionId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("RemainingBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SalesChannel")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SalesRepresentative")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("SgkAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -414,6 +450,12 @@ namespace VisionXPro.Persistence.Migrations
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Origin")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PriceUpdateDate")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal>("PurchasePrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -453,6 +495,81 @@ namespace VisionXPro.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Roles");
+                });
+
+            modelBuilder.Entity("VisionXPro.Domain.Entities.ShopSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MedulaFacilityCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MedulaPassword")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MedulaRegistryNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReceiptFooter")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("ShowPriceOnLabel")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SmsApiToken")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("SmsBirthdayCampaign")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SmsProvider")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("SmsReadyNotification")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SmsSenderHeader")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StoreName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxOffice")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UtsGlnCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UtsToken")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ShopSettings");
                 });
 
             modelBuilder.Entity("VisionXPro.Domain.Entities.Transaction", b =>
@@ -519,6 +636,15 @@ namespace VisionXPro.Persistence.Migrations
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ProductName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("RequestedBy")
                         .HasColumnType("uniqueidentifier");

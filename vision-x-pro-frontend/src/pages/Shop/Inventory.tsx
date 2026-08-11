@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   PackageSearch, Plus, 
-  Search, Filter, Edit, Box, X, Sparkles, Layers,
-  LayoutGrid, List, Eye, ArrowUpRight, ArrowDownRight, Glasses, Droplets, Gem
+  Search, Edit, Box, X, Sparkles, Layers,
+  LayoutGrid, List, Eye, ArrowUpRight, ArrowDownRight, Glasses, Droplets, Gem, Download, Tag, Trash2
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import api from '../../lib/api';
+import { downloadCsv } from '../../utils/csvExport';
 
 export default function Inventory() {
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
@@ -20,19 +22,14 @@ export default function Inventory() {
   // Form state
   const [formData, setFormData] = useState({
     barcode: '', name: '', category: 'Çerçeve', 
-    brand: '', purchasePrice: '', salePrice: '', quantity: 1, serialNumber: '', utsCode: ''
+    brand: '', purchasePrice: '', salePrice: '', quantity: 1, serialNumber: '', utsCode: '',
+    origin: 'Türkiye', priceUpdateDate: new Date().toISOString().split('T')[0]
   });
 
   const fetchInventory = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5069/api/products', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setInventoryItems(data);
-      }
+      const data = await api.get('/products');
+      setInventoryItems(data);
     } catch(err) {
       console.error(err);
     } finally {
@@ -46,7 +43,7 @@ export default function Inventory() {
 
   const handleOpenAdd = () => {
     setModalMode('add');
-    setFormData({ barcode: '', name: '', category: 'Çerçeve', brand: '', purchasePrice: '', salePrice: '', quantity: 1, serialNumber: '', utsCode: '' });
+    setFormData({ barcode: '', name: '', category: 'Çerçeve', brand: '', purchasePrice: '', salePrice: '', quantity: 1, serialNumber: '', utsCode: '', origin: 'Türkiye', priceUpdateDate: new Date().toISOString().split('T')[0] });
     setIsModalOpen(true);
   };
 
@@ -62,7 +59,9 @@ export default function Inventory() {
       salePrice: item.salePrice?.toString() || '', 
       quantity: item.quantity || 1, 
       serialNumber: item.serialNumber || '', 
-      utsCode: item.utsCode || '' 
+      utsCode: item.utsCode || '',
+      origin: item.origin || 'Türkiye',
+      priceUpdateDate: item.priceUpdateDate || new Date().toISOString().split('T')[0]
     });
     setIsModalOpen(true);
   };
@@ -70,7 +69,6 @@ export default function Inventory() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
       const payload = {
         ...formData,
         purchasePrice: parseFloat(formData.purchasePrice || "0"),
@@ -78,33 +76,20 @@ export default function Inventory() {
         quantity: parseInt(formData.quantity.toString() || "0")
       };
       
-      let url = 'http://localhost:5069/api/products';
-      let method = 'POST';
+      toast.loading('İşleniyor...', { id: 'invSave' });
 
       if (modalMode === 'edit') {
-        url = `http://localhost:5069/api/products/${editingProductId}`;
-        method = 'PUT';
+        await api.put(`/products/${editingProductId}`, payload);
+        toast.success('Değişiklikler kaydedildi.', { id: 'invSave' });
+      } else {
+        await api.post('/products', payload);
+        toast.success('Ürün eklendi.', { id: 'invSave' });
       }
 
-      toast.loading('İşleniyor...', { id: 'invSave' });
-      const res = await fetch(url, {
-        method,
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (res.ok) {
-        toast.success(modalMode === 'add' ? 'Ürün eklendi.' : 'Değişiklikler kaydedildi.', { id: 'invSave' });
-        setIsModalOpen(false);
-        await fetchInventory(); 
-      } else {
-        toast.error('Kayıt başarısız.', { id: 'invSave' });
-      }
-    } catch(err) {
-      toast.error('Sunucu Bağlantı Hatası', { id: 'invSave' });
+      setIsModalOpen(false);
+      await fetchInventory(); 
+    } catch(err: any) {
+      toast.error(err.message || 'Kayıt başarısız.', { id: 'invSave' });
     }
   };
 
@@ -116,11 +101,12 @@ export default function Inventory() {
     return matchesSearch && matchesCategory;
   });
 
-  const categories = ['Tümü', 'Çerçeve', 'Cam', 'Lens', 'Aksesuar'];
+  const categories = ['Tümü', 'Çerçeve', 'Güneş Gözlüğü', 'Cam', 'Lens', 'Aksesuar'];
 
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
       case 'Çerçeve': return <Glasses className="w-5 h-5 text-indigo-500" />;
+      case 'Güneş Gözlüğü': return <Glasses className="w-5 h-5 text-orange-500" />;
       case 'Lens': return <Droplets className="w-5 h-5 text-cyan-500" />;
       case 'Aksesuar': return <Gem className="w-5 h-5 text-amber-500" />;
       case 'Cam': return <Eye className="w-5 h-5 text-emerald-500" />;
@@ -131,6 +117,7 @@ export default function Inventory() {
   const getCategoryBg = (cat: string) => {
     switch (cat) {
       case 'Çerçeve': return 'bg-indigo-50 text-indigo-700';
+      case 'Güneş Gözlüğü': return 'bg-orange-50 text-orange-700';
       case 'Lens': return 'bg-cyan-50 text-cyan-700';
       case 'Aksesuar': return 'bg-amber-50 text-amber-700';
       case 'Cam': return 'bg-emerald-50 text-emerald-700';
@@ -159,8 +146,34 @@ export default function Inventory() {
           </div>
           
           <div className="flex gap-3 w-full md:w-auto">
-             <button onClick={() => toast('Toplu içe aktarma yakında eklenecek.')} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3.5 bg-white border border-slate-200 shadow-sm rounded-2xl text-sm font-bold text-slate-700 hover:bg-slate-50 hover:shadow-md transition-all">
+             <label className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3.5 bg-white border border-slate-200 shadow-sm rounded-2xl text-sm font-bold text-slate-700 hover:bg-slate-50 hover:shadow-md transition-all cursor-pointer">
+               <input type="file" accept=".csv" className="hidden" onChange={async (e) => {
+                 const file = e.target.files?.[0];
+                 if (!file) return;
+                 try {
+                   toast.loading('Katalog dosyası işleniyor...');
+                   const text = await file.text();
+                   const result = await api.post('/products/import', { csvContent: text });
+                   toast.dismiss();
+                   toast.success(result.message || `${file.name} içe aktarıldı.`);
+                   const data = await api.get('/products');
+                   setInventoryItems(data);
+                 } catch (err: any) {
+                   toast.dismiss();
+                   toast.error(err.message || 'İçe aktarma başarısız.');
+                 } finally {
+                   e.target.value = '';
+                 }
+               }} />
                İçe Aktar
+             </label>
+             <button onClick={() => {
+               downloadCsv('stok_listesi.csv',
+                 ['Kategori', 'Ürün Adı', 'Barkod', 'Alış', 'Satış', 'Miktar'],
+                 filteredItems.map(item => [item.category, item.name, item.barcode, item.purchasePrice, item.salePrice, item.quantity])
+               );
+             }} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3.5 bg-emerald-50 border border-emerald-200 shadow-sm rounded-2xl text-sm font-bold text-emerald-700 hover:bg-emerald-100 hover:shadow-md transition-all cursor-pointer">
+               <Download className="w-4 h-4" /> Dışa Aktar
              </button>
              <button onClick={handleOpenAdd} className="flex-[2] md:flex-none flex items-center justify-center gap-2 px-7 py-3.5 bg-slate-800 shadow-lg shadow-slate-200 rounded-2xl text-sm font-bold text-white hover:bg-slate-900 transition-all active:scale-95">
                <Plus className="w-4 h-4" /> Yeni Ürün Ekle
@@ -221,7 +234,7 @@ export default function Inventory() {
         {/* INVENTORY VIEWS */}
         <AnimatePresence mode="wait">
            {loading ? (
-             <div className="py-32 flex justify-center text-slate-400 font-bold">SQL Veritabanı Taranıyor...</div>
+             <div className="py-32 flex justify-center text-slate-400 font-bold">Stok listesi yükleniyor...</div>
            ) : filteredItems.length === 0 ? (
              <div className="py-24 flex flex-col items-center justify-center bg-white border border-slate-200 border-dashed rounded-3xl text-slate-400">
                <PackageSearch className="w-16 h-16 mb-4 text-slate-200" />
@@ -238,9 +251,12 @@ export default function Inventory() {
                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${getCategoryBg(item.category)}`}>
                            {getCategoryIcon(item.category)}
                         </div>
-                        <div className="flex flex-col items-end">
+                        <div className="flex flex-col items-end gap-1">
+                           {item.utsCode && (
+                             <span className="text-[9px] font-black tracking-wider text-white bg-indigo-600 px-2 py-0.5 rounded-md uppercase shadow-sm">ÜTS Kayıtlı</span>
+                           )}
                            <span className="font-mono text-xs font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">{item.barcode}</span>
-                           {item.utsCode && <span className="text-[9px] font-black tracking-widest text-indigo-400 uppercase mt-2">{item.utsCode}</span>}
+                           {item.utsCode && <span className="text-[9px] font-mono font-bold text-indigo-600 max-w-[120px] truncate" title={item.utsCode}>{item.utsCode}</span>}
                         </div>
                      </div>
                      
@@ -264,9 +280,27 @@ export default function Inventory() {
                         <div className={`px-3 py-1.5 rounded-xl text-xs font-black border flex items-center gap-1.5 ${item.quantity > 0 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
                            <Box className="w-3.5 h-3.5" /> {item.quantity} Adet
                         </div>
-                        <button onClick={() => handleOpenEdit(item)} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-800 hover:text-white flex items-center justify-center transition-colors shadow-sm">
-                           <Edit className="w-4 h-4"/>
-                        </button>
+                        <div className="flex gap-2">
+                           <button onClick={() => toast.success(`Etiket Yazdırılıyor: ${item.barcode}`, { icon: '🖨️' })} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-indigo-600 hover:text-white flex items-center justify-center transition-colors shadow-sm" title="Etiket Bas">
+                              <Tag className="w-4 h-4"/>
+                           </button>
+                           <button onClick={() => handleOpenEdit(item)} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-800 hover:text-white flex items-center justify-center transition-colors shadow-sm" title="Düzenle">
+                              <Edit className="w-4 h-4"/>
+                           </button>
+                           <button onClick={async () => {
+                              if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) {
+                                try {
+                                  await api.delete(`/products/${item.productId}`);
+                                  toast.success('Ürün silindi.');
+                                  fetchInventory();
+                                } catch (err: any) {
+                                  toast.error(err.message || 'Ürün silinemedi.');
+                                }
+                              }
+                            }} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-rose-600 hover:text-white flex items-center justify-center transition-colors shadow-sm" title="Sil">
+                               <Trash2 className="w-4 h-4"/>
+                            </button>
+                        </div>
                      </div>
                   </div>
                 ))}
@@ -314,9 +348,27 @@ export default function Inventory() {
                            </div>
                          </td>
                          <td className="px-8 py-5 text-center">
-                            <button onClick={() => handleOpenEdit(item)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-200 rounded-xl transition-all" title="Düzenle">
-                               <Edit className="w-5 h-5"/>
-                            </button>
+                            <div className="flex justify-center gap-2">
+                               <button onClick={() => toast.success(`Etiket Yazdırılıyor: ${item.barcode}`, { icon: '🖨️' })} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" title="Etiket Çıkar">
+                                  <Tag className="w-5 h-5"/>
+                               </button>
+                               <button onClick={() => handleOpenEdit(item)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-200 rounded-xl transition-all" title="Düzenle">
+                                  <Edit className="w-5 h-5"/>
+                               </button>
+                               <button onClick={async () => {
+                                  if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) {
+                                    try {
+                                      await api.delete(`/products/${item.productId}`);
+                                      toast.success('Ürün silindi.');
+                                      fetchInventory();
+                                    } catch (err: any) {
+                                      toast.error(err.message || 'Ürün silinemedi.');
+                                    }
+                                  }
+                                }} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all" title="Sil">
+                                  <Trash2 className="w-5 h-5"/>
+                               </button>
+                            </div>
                          </td>
                        </tr>
                      ))}
@@ -366,7 +418,7 @@ export default function Inventory() {
                    <div>
                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Kategori Seçimi</label>
                      <select value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})} className="w-full text-sm font-bold py-4 px-4 rounded-xl outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 border border-slate-200 bg-white text-slate-700 transition-all">
-                       <option>Çerçeve</option><option>Cam</option><option>Lens</option><option>Aksesuar</option>
+                       <option>Çerçeve</option><option>Güneş Gözlüğü</option><option>Cam</option><option>Lens</option><option>Aksesuar</option>
                      </select>
                    </div>
                    <div>
@@ -375,7 +427,18 @@ export default function Inventory() {
                    </div>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-6 bg-slate-50 p-6 rounded-[1.5rem] border border-slate-100 mt-2">
+                <div className="grid grid-cols-2 gap-6">
+                   <div>
+                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Menşei (Ülke)</label>
+                     <input type="text" required value={formData.origin} onChange={e=>setFormData({...formData, origin: e.target.value})} className="w-full text-sm font-bold py-4 px-4 rounded-xl outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 border border-slate-200 bg-white text-slate-700 transition-all placeholder:text-slate-300" placeholder="Örn: İtalya"/>
+                   </div>
+                   <div>
+                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Fiyat Değişim Tarihi</label>
+                     <input type="date" required value={formData.priceUpdateDate} onChange={e=>setFormData({...formData, priceUpdateDate: e.target.value})} className="w-full text-sm font-bold py-4 px-4 rounded-xl outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 border border-slate-200 bg-white text-slate-700 transition-all"/>
+                   </div>
+                 </div>
+                 
+                 <div className="grid grid-cols-3 gap-6 bg-slate-50 p-6 rounded-[1.5rem] border border-slate-100 mt-2">
                    <div>
                      <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Maliyet (₺)</label>
                      <input required type="number" step="0.01" value={formData.purchasePrice} onChange={e=>setFormData({...formData, purchasePrice: e.target.value})} className="w-full text-base font-black py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-slate-200 border border-slate-200 bg-white text-slate-600 transition-all" />

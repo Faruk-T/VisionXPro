@@ -37,7 +37,10 @@ namespace VisionXPro.Domain.Entities
         public Guid OrganizationId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? GlNCode { get; set; }
+        /// <summary>İl (81 ilden biri, mağaza lokasyonu).</summary>
         public string? City { get; set; }
+        /// <summary>İlçe; halka açık mağaza arama ve randevu için.</summary>
+        public string? District { get; set; }
     }
 
     public class User : BranchTenantEntity
@@ -46,7 +49,9 @@ namespace VisionXPro.Domain.Entities
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
         public Guid? RoleId { get; set; }
-        public string Role { get; set; } = "Customer"; // SuperAdmin, ShopOwner, Customer
+        public string Role { get; set; } = "Customer"; // SuperAdmin, ShopOwner, CorporateOwner, ShopStaff, Customer
+        /// <summary>Görev unvanı: Mağaza Müdürü, Satış Danışmanı, Optisyen vb.</summary>
+        public string? JobTitle { get; set; }
         public bool IsActive { get; set; } = true;
     }
 
@@ -64,6 +69,8 @@ namespace VisionXPro.Domain.Entities
         public string Phone { get; set; } = string.Empty;
         public DateTime? BirthDate { get; set; }
         public decimal CreditBalance { get; set; }
+        public string Segment { get; set; } = "Standart"; // VIP, Standart, vb.
+        public string Source { get; set; } = "Manuel"; // Manuel, Randevu
     }
 
     public class Appointment : BranchTenantEntity
@@ -71,6 +78,8 @@ namespace VisionXPro.Domain.Entities
         public Guid CustomerId { get; set; }
         public DateTime AppointmentDate { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string? AppointmentType { get; set; }
+        public string? AssignedStaffName { get; set; }
     }
 
     public class Product : TenantEntity
@@ -82,6 +91,8 @@ namespace VisionXPro.Domain.Entities
         public string Brand { get; set; } = string.Empty;
         public decimal PurchasePrice { get; set; }
         public decimal SalePrice { get; set; }
+        public string? Origin { get; set; }
+        public string? PriceUpdateDate { get; set; }
     }
 
     public class InventoryItem : BranchTenantEntity
@@ -99,6 +110,9 @@ namespace VisionXPro.Domain.Entities
         public Guid RequestedBy { get; set; }
         public Guid? ApprovedBy { get; set; }
         public DateTime TransferDate { get; set; }
+        public Guid? ProductId { get; set; }
+        public int Quantity { get; set; }
+        public string? ProductName { get; set; }
     }
 
     public class Prescription : BaseEntity
@@ -129,6 +143,11 @@ namespace VisionXPro.Domain.Entities
         public decimal TotalAmount { get; set; }
         public decimal DiscountAmount { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string SalesChannel { get; set; } = "POS"; // POS, Optik, E-Ticaret
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingBalance { get; set; }
+        public decimal SgkAmount { get; set; }
+        public string? SalesRepresentative { get; set; }
         public Guid CreatedBy { get; set; }
         
         public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
@@ -161,5 +180,52 @@ namespace VisionXPro.Domain.Entities
         public string? OldValues { get; set; }
         public string? NewValues { get; set; }
         public DateTime Timestamp { get; set; }
+    }
+
+    public class ShopSettings : BranchTenantEntity
+    {
+        // Genel Şube Bilgileri
+        public string StoreName { get; set; } = string.Empty;
+        public string? TaxOffice { get; set; }
+        public string? TaxNumber { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+
+        // SGK Medula Entegrasyonu
+        public string? MedulaFacilityCode { get; set; }
+        public string? MedulaPassword { get; set; }
+        public string? MedulaRegistryNo { get; set; }
+
+        // ÜTS (Ürün Takip Sistemi)
+        public string? UtsToken { get; set; }
+        public string? UtsGlnCode { get; set; }
+
+        // SMS/İletişim
+        public string? SmsProvider { get; set; }
+        public string? SmsApiToken { get; set; }
+        public string? SmsSenderHeader { get; set; }
+        public bool SmsReadyNotification { get; set; } = true;
+        public bool SmsBirthdayCampaign { get; set; } = true;
+
+        // Fiş Ayarları
+        public string? ReceiptFooter { get; set; }
+        public bool ShowPriceOnLabel { get; set; } = true;
+    }
+
+    /// <summary>ÜTS / Medula manuel bildirim kuyruğu (canlı API gelene kadar).</summary>
+    public class RegulatoryNotification : BranchTenantEntity
+    {
+        public Guid? OrderId { get; set; }
+        public string OrderNumber { get; set; } = string.Empty;
+        /// <summary>UTS veya Medula</summary>
+        public string NotificationType { get; set; } = string.Empty;
+        public Guid? ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public string? UtsCode { get; set; }
+        public int Quantity { get; set; } = 1;
+        public string CustomerName { get; set; } = string.Empty;
+        /// <summary>Bekliyor | Tamamlandı</summary>
+        public string Status { get; set; } = "Bekliyor";
+        public DateTime? CompletedAt { get; set; }
     }
 }

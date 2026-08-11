@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using VisionXPro.Domain.Entities;
 using VisionXPro.Persistence;
@@ -61,6 +63,7 @@ namespace VisionXPro.Api.Controllers
                     Name = "Merkez Şube",
                     OrganizationId = org.Id,
                     City = request.City ?? "Merkez",
+                    District = string.IsNullOrWhiteSpace(request.District) ? null : request.District.Trim(),
                 };
 
                 _context.Branches.Add(mainBranch);
@@ -84,9 +87,11 @@ namespace VisionXPro.Api.Controllers
                 _context.Users.Add(adminUser);
                 await _context.SaveChangesAsync();
 
+                var adminUserId = GetCurrentUserId();
                 _context.AuditLogs.Add(new AuditLog {
+                    UserId = adminUserId,
                     TableName = "Organizations",
-                    Action = $"Yeni Mağaza Eklendi: {org.Name}",
+                    Action = $"Yeni mağaza oluşturuldu: {org.Name}",
                     Timestamp = DateTime.UtcNow
                 });
                 await _context.SaveChangesAsync();
@@ -226,6 +231,13 @@ namespace VisionXPro.Api.Controllers
             }
         }
 
+        private Guid? GetCurrentUserId()
+        {
+            var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            return Guid.TryParse(raw, out var id) ? id : null;
+        }
+
         [HttpGet("{orgId}/dashboard-stats")]
         public async Task<IActionResult> GetOrgDashboardStats(Guid orgId)
         {
@@ -254,12 +266,15 @@ namespace VisionXPro.Api.Controllers
         public string Name { get; set; } = string.Empty;
         public string? TaxNumber { get; set; }
         public string? City { get; set; }
+        public string? District { get; set; }
         public string? SubscriptionPlan { get; set; }
         public DateTime? LicenseStartDate { get; set; }
         public DateTime? LicenseEndDate { get; set; }
         public bool IsTrial { get; set; }
         public string AdminEmail { get; set; } = string.Empty;
         public string AdminPassword { get; set; } = string.Empty;
+        /// <summary>Shop = tek mağaza, Corporate = çok şubeli kurumsal (Kumsal)</summary>
+        public string AccountType { get; set; } = "Shop";
     }
 
     public class ExtendLicenseRequest

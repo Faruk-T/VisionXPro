@@ -46,6 +46,9 @@ export default function Home() {
                <Link to="/stores" className="px-10 py-5 rounded-2xl bg-white text-indigo-900 font-black text-lg hover:bg-indigo-50 hover:scale-105 transition-all shadow-[0_0_40px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2">
                  Optik Mağazaları Keşfet <ChevronRight className="w-5 h-5"/>
                </Link>
+               <Link to="/ecommerce" className="px-10 py-5 rounded-2xl bg-slate-900/40 backdrop-blur border border-white/20 text-white font-black text-lg hover:bg-slate-800/60 hover:scale-105 transition-all shadow-xl flex items-center justify-center gap-2">
+                 Online Mağaza (Gözlükler) <Glasses className="w-5 h-5"/>
+               </Link>
             </motion.div>
          </div>
       </section>

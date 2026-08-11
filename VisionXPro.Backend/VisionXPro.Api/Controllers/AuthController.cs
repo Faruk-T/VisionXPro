@@ -2,9 +2,13 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using VisionXPro.Api.Services;
+using VisionXPro.Application.Authorization;
 using VisionXPro.Application.DTOs;
 using VisionXPro.Application.Interfaces;
 using VisionXPro.Domain.Entities;
@@ -37,17 +41,9 @@ namespace VisionXPro.Api.Controllers
             if (user == null)
                 return Unauthorized(new { message = "Invalid email or password" });
 
-            // Şifre kontrolü - (Eski düz metin şifreler için bypass istersen ekleyebilirsin ama yeni sistemde hepsi hashli olacak)
-            if (user.PasswordHash == request.Password) 
-            {
-                // Geçici olarak plain text desteklemek isterseniz, ama idealde aşağıdakini kullanıyoruz.
-            }
-            else 
-            {
-                var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
-                if (result == PasswordVerificationResult.Failed)
-                    return Unauthorized(new { message = "Invalid email or password" });
-            }
+            var verify = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
+            if (verify == PasswordVerificationResult.Failed)
+                return Unauthorized(new { message = "Invalid email or password" });
 
             if (!user.IsActive)
                 return BadRequest(new { message = "User is not active" });
@@ -66,18 +62,38 @@ namespace VisionXPro.Api.Controllers
                         return BadRequest(new { message = "Sistem şu an bakım modundadır. Genel müdürlük dışında erişim kapatılmıştır." });
                     }
                 }
+
+                // Lisans Süresi Kontrolü
+                if (user.OrganizationId != Guid.Empty)
+                {
+                    var org = await _context.Organizations.FindAsync(user.OrganizationId);
+                    if (org != null && org.LicenseEndDate.HasValue && org.LicenseEndDate.Value < DateTime.UtcNow)
+                    {
+                        return StatusCode(403, new { code = "LICENSE_EXPIRED", message = "Lisans süreniz dolmuştur. Lütfen sistem yöneticisi ile iletişime geçin." });
+                    }
+                }
             }
 
             var token = _jwtProvider.GenerateToken(user);
 
-            // Log security event
+            Organization? logOrg = null;
+            Branch? logBranch = null;
+            if (user.OrganizationId != Guid.Empty)
+                logOrg = await _context.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == user.OrganizationId);
+            if (user.BranchId != Guid.Empty)
+                logBranch = await _context.Branches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == user.BranchId);
+
+            var actorSummary = SecurityAuditActor.BuildSummary(user, logOrg, logBranch);
+
             _context.AuditLogs.Add(new AuditLog {
                 UserId = user.Id,
                 TableName = "SystemAuth",
-                Action = $"Kullanıcı Girişi: {user.Role}",
+                Action = $"{actorSummary} sisteme giriş yaptı.",
                 Timestamp = DateTime.UtcNow
             });
             await _context.SaveChangesAsync();
+
+            var permissions = StaffPermissions.Resolve(user.Role, user.JobTitle);
 
             var response = new AuthResponse
             {
@@ -85,6 +101,8 @@ namespace VisionXPro.Api.Controllers
                 UserId = user.Id,
                 FullName = user.FullName,
                 Role = user.Role,
+                JobTitle = user.JobTitle,
+                Permissions = permissions.ToList(),
                 OrganizationId = user.OrganizationId,
                 BranchId = user.BranchId
             };

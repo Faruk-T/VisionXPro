@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Glasses } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const OpticianAvatar = ({ isPasswordFocused }: { isPasswordFocused: boolean }) => {
   return (
@@ -70,13 +71,15 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  const [isLicenseExpired, setIsLicenseExpired] = useState(false);
   const login = useAuthStore((state) => state.login);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:5069/api/auth/login', {
+      const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5069/api';
+      const res = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -90,18 +93,73 @@ export default function Login() {
           email: email,
           role: data.role,
           organizationId: data.organizationId,
-          branchId: data.branchId
+          branchId: data.branchId,
+          jobTitle: data.jobTitle,
+          permissions: data.permissions ?? [],
         };
         login(data.token, userPayload);
         navigate('/dashboard');
       } else {
-        const errorData = await res.json();
-        alert('Giriş başarısız: ' + (errorData.message || 'Geçersiz bilgiler'));
+        const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+        const code = errorData.code as string | undefined;
+        const message = typeof errorData.message === 'string' ? errorData.message : '';
+        if (
+          res.status === 402 ||
+          code === 'LICENSE_EXPIRED' ||
+          (res.status === 403 && (/lisans/i.test(message) || /license/i.test(message)))
+        ) {
+          setIsLicenseExpired(true);
+          return;
+        }
+        alert('Giriş başarısız: ' + (message || 'Geçersiz bilgiler'));
       }
     } catch (err) {
       alert('Sunucuya bağlanırken hata oluştu. Lütfen bağlantınızı kontrol edin.');
     }
   };
+
+  if (isLicenseExpired) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
+        <motion.div
+          className="absolute inset-0 opacity-40"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.4 }}
+          transition={{ duration: 1 }}
+        >
+          <div className="absolute top-1/4 -left-20 w-96 h-96 rounded-full bg-fuchsia-500/30 blur-[120px]" />
+          <div className="absolute bottom-1/4 -right-20 w-96 h-96 rounded-full bg-cyan-500/25 blur-[120px]" />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 28, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 120, damping: 18 }}
+          className="relative z-10 max-w-lg w-full bg-white/10 backdrop-blur-2xl border border-white/20 p-10 md:p-12 rounded-[2rem] text-center shadow-2xl"
+        >
+          <motion.div
+            className="w-28 h-28 mx-auto rounded-full flex items-center justify-center mb-8 bg-gradient-to-br from-amber-500/30 to-red-600/40 border border-white/30 shadow-[0_0_48px_rgba(251,191,36,0.35)]"
+            animate={{ scale: [1, 1.06, 1], rotate: [0, -2, 2, 0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <Lock className="w-14 h-14 text-amber-300 drop-shadow-lg" strokeWidth={2.25} />
+          </motion.div>
+          <h2 className="text-3xl md:text-4xl font-black text-white mb-4 tracking-tight">Lisansınız Süresini Tamamladı</h2>
+          <p className="text-slate-300 text-base md:text-lg mb-10 leading-relaxed font-medium px-2">
+            Bu hesap şu anda devre dışı. Sisteme yeniden giriş yapmak için lütfen <span className="text-white font-bold">Vision X Pro sistem yöneticinize</span> başvurun; lisansınız yenilendikten sonra erişiminiz otomatik olarak açılır.
+          </p>
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setIsLicenseExpired(false)}
+            className="px-10 py-3.5 bg-white text-slate-900 font-black rounded-xl hover:bg-slate-100 transition-colors shadow-[0_8px_30px_rgba(0,0,0,0.25)] text-sm uppercase tracking-wide"
+          >
+            Giriş sayfasına dön
+          </motion.button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden font-sans">

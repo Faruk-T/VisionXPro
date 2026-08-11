@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Building2, Users as UsersIcon, AlertTriangle, Plus, Key, Calendar, Mail, FileText, CheckCircle, XCircle, Trash2 } from 'lucide-react';
-
+import React, { useState, useEffect, useMemo } from 'react';
+import { Building2, Users as UsersIcon, AlertTriangle, Plus, Key, Calendar, Mail, FileText, CheckCircle, XCircle, Trash2, MapPin } from 'lucide-react';
+import { turkeyCities } from '../../utils/turkey_cities';
+import { api } from '../../lib/api';
 
 interface OrgStats {
   totalOrganizations: number;
@@ -37,6 +38,8 @@ export default function AdminOrganizations() {
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
   const [newLicenseDate, setNewLicenseDate] = useState('');
+  const [newBranchName, setNewBranchName] = useState('');
+  const [addingBranch, setAddingBranch] = useState(false);
   
   const [loading, setLoading] = useState(true);
 
@@ -45,26 +48,28 @@ export default function AdminOrganizations() {
     name: '',
     taxNumber: '',
     city: 'İstanbul',
+    district: 'Kadıköy',
     subscriptionPlan: 'Pro',
     licenseEndDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
     adminEmail: '',
-    adminPassword: ''
+    adminPassword: '',
+    accountType: 'Shop' as 'Shop' | 'Corporate',
   });
 
-  const getAuthHeader = () => {
-    const token = localStorage.getItem('token');
-    return { 'Authorization': `Bearer ${token}` };
-  };
+  const sortedProvinces = useMemo(() => Object.keys(turkeyCities).sort((a, b) => a.localeCompare(b, 'tr')), []);
 
   const fetchStatsAndOrgs = async () => {
     try {
-      const headers = getAuthHeader();
-      const statsRes = await fetch('http://localhost:5069/api/organizations/stats', { headers });
-      if (statsRes.ok) setStats(await statsRes.json());
+      const statsData = await api.get<any>('/admin/dashboard-stats');
+      setStats({
+        totalOrganizations: statsData.totalShops || 0,
+        expiringLicensesCount: statsData.expiringSoonCount || 0,
+        totalCustomers: statsData.totalCustomers || 0
+      });
       
-      const orgsRes = await fetch('http://localhost:5069/api/organizations', { headers });
-      if (orgsRes.ok) setOrganizations(await orgsRes.json());
-    } catch (error) {
+      const orgsData = await api.get<Organization[]>('/admin/organizations');
+      setOrganizations(orgsData);
+    } catch (error: any) {
       console.error("Failed to fetch dashboard data:", error);
     } finally {
       setLoading(false);
@@ -78,22 +83,23 @@ export default function AdminOrganizations() {
   const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:5069/api/organizations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        body: JSON.stringify(formData)
+      await api.post('/admin/organizations', formData);
+      setIsAddModalOpen(false);
+      setFormData({
+        name: '',
+        taxNumber: '',
+        city: 'İstanbul',
+        district: 'Kadıköy',
+        subscriptionPlan: 'Pro',
+        licenseEndDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+        adminEmail: '',
+        adminPassword: '',
+        accountType: 'Shop',
       });
-      
-      if (res.ok) {
-        setIsAddModalOpen(false);
-        fetchStatsAndOrgs();
-        alert('Mağaza başarıyla eklendi!');
-      } else {
-        const error = await res.json();
-        alert('Hata: ' + (error.message || 'Ters giden bir şeyler var.'));
-      }
-    } catch (e) {
-      alert('Sunucuya bağlanırken hata oluştu.');
+      fetchStatsAndOrgs();
+      alert('Mağaza başarıyla eklendi!');
+    } catch (e: any) {
+      alert('Hata: ' + (e.message || 'Sunucuya bağlanırken hata oluştu.'));
     }
   };
 
@@ -103,20 +109,11 @@ export default function AdminOrganizations() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5069/api/organizations/${orgId}`, {
-        method: 'DELETE',
-        headers: getAuthHeader()
-      });
-
-      if (res.ok) {
-        alert('Mağaza ve tüm kullanıcıları sistemden başarıyla silindi.');
-        fetchStatsAndOrgs();
-      } else {
-        const err = await res.json();
-        alert('Hata: ' + (err.message || 'Silme işlemi başarısız.'));
-      }
-    } catch (e) {
-      alert('Sunucuya bağlanırken hata oluştu.');
+      await api.delete(`/admin/organizations/${orgId}`);
+      alert('Mağaza ve tüm kullanıcıları sistemden başarıyla silindi.');
+      fetchStatsAndOrgs();
+    } catch (e: any) {
+      alert('Hata: ' + (e.message || 'Silme işlemi başarısız.'));
     }
   };
 
@@ -126,8 +123,8 @@ export default function AdminOrganizations() {
     
     // Fetch users for this org
     try {
-      const res = await fetch(`http://localhost:5069/api/organizations/${org.id}/users`, { headers: getAuthHeader() });
-      if (res.ok) setOrgUsers(await res.json());
+      const usersData = await api.get<OrgUser[]>(`/admin/organizations/${org.id}/users`);
+      setOrgUsers(usersData);
     } catch (error) {
       console.error("Failed to fetch org users:", error);
     }
@@ -136,21 +133,12 @@ export default function AdminOrganizations() {
   const handleExtendLicense = async () => {
     if (!selectedOrg) return;
     try {
-      const res = await fetch(`http://localhost:5069/api/organizations/${selectedOrg.id}/license`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        body: JSON.stringify({ newEndDate: newLicenseDate })
-      });
-      
-      if (res.ok) {
-        alert('Lisans süresi başarıyla uzatıldı!');
-        setSelectedOrg(null);
-        fetchStatsAndOrgs();
-      } else {
-        alert('Lisans güncellenemedi.');
-      }
-    } catch (e) {
-      alert('Sunucuya bağlanırken hata oluştu.');
+      await api.put(`/admin/organizations/${selectedOrg.id}/license`, { newEndDate: newLicenseDate });
+      alert('Lisans süresi başarıyla uzatıldı!');
+      setSelectedOrg(null);
+      fetchStatsAndOrgs();
+    } catch (e: any) {
+      alert('Hata: ' + (e.message || 'Lisans güncellenemedi.'));
     }
   };
 
@@ -160,19 +148,10 @@ export default function AdminOrganizations() {
     if (!newPassword) return;
 
     try {
-      const res = await fetch(`http://localhost:5069/api/organizations/${selectedOrg.id}/users/${userId}/reset-password`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        body: JSON.stringify({ newPassword })
-      });
-      
-      if (res.ok) {
-        alert('Personel şifresi başarıyla güncellendi!');
-      } else {
-        alert('Şifre güncellenemedi.');
-      }
-    } catch (e) {
-      alert('Sunucuya bağlanırken hata oluştu.');
+      await api.put(`/admin/organizations/${selectedOrg.id}/users/${userId}/reset-password`, { newPassword });
+      alert('Personel şifresi başarıyla güncellendi!');
+    } catch (e: any) {
+      alert('Hata: ' + (e.message || 'Şifre güncellenemedi.'));
     }
   };
 
@@ -292,7 +271,7 @@ export default function AdminOrganizations() {
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="text-xl font-bold text-gray-900 -tracking-tight">Yeni Mağaza Ekle</h3>
+              <h3 className="text-xl font-bold text-gray-900 -tracking-tight">Yeni Mağaza / Kurumsal Ekle</h3>
               <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition">
                 <XCircle className="w-6 h-6" />
               </button>
@@ -313,6 +292,61 @@ export default function AdminOrganizations() {
                     <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
                     <input type="text" value={formData.taxNumber} onChange={e => setFormData({...formData, taxNumber: e.target.value})} className="w-full pl-10 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium" placeholder="1234567890" />
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Hesap Tipi</label>
+                <select
+                  value={formData.accountType}
+                  onChange={e => setFormData({ ...formData, accountType: e.target.value as 'Shop' | 'Corporate' })}
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="Shop">Tek Mağaza (ShopOwner)</option>
+                  <option value="Corporate">Kurumsal Grup — Kumsal (CorporateOwner)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">İl</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400 pointer-events-none" />
+                    <select
+                      value={formData.city}
+                      onChange={(e) =>
+                        setFormData((prev) => {
+                          const nextCity = e.target.value;
+                          const districts = turkeyCities[nextCity as keyof typeof turkeyCities];
+                          const nextDistrict =
+                            districts && districts.length ? districts[0] : '';
+                          return { ...prev, city: nextCity, district: nextDistrict };
+                        })
+                      }
+                      className="w-full pl-10 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium appearance-none cursor-pointer text-gray-800"
+                    >
+                      {sortedProvinces.map((prov) => (
+                        <option key={prov} value={prov}>{prov}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">İlçe</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-300 pointer-events-none" />
+                    <select
+                      value={formData.district}
+                      onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                      className="w-full pl-10 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium appearance-none cursor-pointer text-gray-800 disabled:opacity-50"
+                      disabled={!formData.city || !turkeyCities[formData.city as keyof typeof turkeyCities]?.length}
+                    >
+                      {(turkeyCities[formData.city as keyof typeof turkeyCities] || []).map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">Halk mağaza sayfasında il ve ilçe filtresinde kullanılır.</p>
                 </div>
               </div>
 
@@ -394,6 +428,46 @@ export default function AdminOrganizations() {
                      Süreyi Uzat & Onayla
                    </button>
                 </div>
+
+                {selectedOrg.branchCount >= 1 && (
+                  <div className="p-5 rounded-2xl border border-slate-200 bg-white space-y-3">
+                    <h4 className="font-bold text-slate-800 text-sm">Ek Şube Ekle (Kurumsal)</h4>
+                    <input
+                      type="text"
+                      value={newBranchName}
+                      onChange={e => setNewBranchName(e.target.value)}
+                      placeholder="Örn: Ali Optik 2"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium"
+                    />
+                    <button
+                      type="button"
+                      disabled={addingBranch || !newBranchName.trim()}
+                      onClick={async () => {
+                        if (!selectedOrg) return;
+                        setAddingBranch(true);
+                        try {
+                          await api.post(`/admin/organizations/${selectedOrg.id}/branches`, {
+                            name: newBranchName.trim(),
+                            city: 'İstanbul',
+                            district: 'Kadıköy',
+                          });
+                          setNewBranchName('');
+                          alert('Şube eklendi.');
+                          fetchStatsAndOrgs();
+                          setSelectedOrg({ ...selectedOrg, branchCount: selectedOrg.branchCount + 1 });
+                        } catch (e: any) {
+                          alert('Hata: ' + (e.message || 'Şube eklenemedi.'));
+                        } finally {
+                          setAddingBranch(false);
+                        }
+                      }}
+                      className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl text-sm hover:bg-slate-900 disabled:opacity-50"
+                    >
+                      {addingBranch ? 'Ekleniyor...' : 'Şube Kaydet'}
+                    </button>
+                    <p className="text-[10px] text-slate-400">Kurumsal firmalar kendi panelinden de şube ekleyebilir.</p>
+                  </div>
+                )}
               </div>
 
               {/* Sağ Yarı: Personel Yönetimi */}

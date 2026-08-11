@@ -1,24 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Shield, Server, Database, Globe, Activity, ToggleLeft, ToggleRight, CheckCircle, PackageSearch } from 'lucide-react';
-
+import { useState, useEffect } from 'react';
+import { Shield, Server, Database, Activity, ToggleLeft, ToggleRight, CheckCircle, PackageSearch } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { api } from '../../lib/api';
+
+const LOG_ROLE_LABELS: Record<string, string> = {
+  SuperAdmin: 'Sistem yöneticisi',
+  ShopOwner: 'Mağaza yöneticisi',
+  CorporateOwner: 'Kurumsal yönetici',
+  Customer: 'Müşteri',
+};
 
 export default function AdminSettings() {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
 
-  const getAuthHeader = () => {
-    const token = localStorage.getItem('token');
-    return { 'Authorization': `Bearer ${token}` };
-  };
-
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const res = await fetch('http://localhost:5069/api/logs', { headers: getAuthHeader() });
-        if (res.ok) {
-           setLogs(await res.json());
-        }
+        const data = await api.get<any[]>('/admin/system-logs');
+        setLogs(data);
       } catch (e) {
          console.error("Failed to fetch logs");
       }
@@ -26,11 +26,8 @@ export default function AdminSettings() {
     
     const fetchMaintenanceStatus = async () => {
       try {
-        const res = await fetch('http://localhost:5069/api/settings/maintenance');
-        if (res.ok) {
-           const data = await res.json();
-           setMaintenanceMode(data.maintenanceMode);
-        }
+        const data = await api.get<any>('/settings/maintenance');
+        setMaintenanceMode(data.maintenanceMode);
       } catch (e) {}
     }
 
@@ -41,24 +38,12 @@ export default function AdminSettings() {
   const handleMaintenanceToggle = async () => {
     try {
       const newMode = !maintenanceMode;
-      const res = await fetch('http://localhost:5069/api/settings/maintenance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader()
-        },
-        body: JSON.stringify({ maintenanceMode: newMode })
-      });
-      
-      if (res.ok) {
-        setMaintenanceMode(newMode);
-        if (newMode) {
-           toast.error('Sistem bakım moduna alındı. Personel ve müşteri erişimi durduruldu.', { icon: '🚧' });
-        } else {
-           toast.success('Bakım modu kapatıldı. Sistem herkese açık.');
-        }
+      await api.post('/settings/maintenance', { maintenanceMode: newMode });
+      setMaintenanceMode(newMode);
+      if (newMode) {
+         toast.error('Sistem bakım moduna alındı. Personel ve müşteri erişimi durduruldu.', { icon: '🚧' });
       } else {
-        toast.error('Bağlantı hatası.');
+         toast.success('Bakım modu kapatıldı. Sistem herkese açık.');
       }
     } catch(e) {
       toast.error('Bağlantı hatası.');
@@ -184,13 +169,20 @@ export default function AdminSettings() {
                   {logs.length === 0 ? (
                      <p className="text-sm text-slate-300">Henüz sistem logu bulunmuyor.</p>
                   ) : (
-                     logs.slice(0, 5).map(log => (
+                     logs.slice(0, 10).map(log => (
                         <div key={log.id} className="border-l-2 border-indigo-400 pl-4 py-1">
-                           <p className="text-[10px] text-slate-300 mb-0.5 tracking-wider uppercase font-bold">
+                           <p className="text-[10px] text-slate-300 mb-1 tracking-wider uppercase font-bold">
                               {new Date(log.timestamp).toLocaleString('tr-TR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}
                            </p>
-                           <p className="text-sm font-semibold">{log.action}</p>
-                           {log.userName && <p className="text-[11px] text-indigo-300 mt-1">Aktör: {log.userName}</p>}
+                           <p className="text-sm font-bold text-white leading-snug">
+                              {log.userName ?? 'Kullanıcı bağlı değil'}
+                           </p>
+                           <p className="text-xs text-white/75 mt-1 leading-snug">{log.action}</p>
+                           {log.role ? (
+                             <p className="text-[10px] text-indigo-200/90 mt-1 font-medium uppercase tracking-wide">
+                               {LOG_ROLE_LABELS[log.role] ?? log.role}
+                             </p>
+                           ) : null}
                         </div>
                      ))
                   )}

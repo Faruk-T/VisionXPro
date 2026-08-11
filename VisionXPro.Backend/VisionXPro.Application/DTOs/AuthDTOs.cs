@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using VisionXPro.Application.Authorization;
 
 namespace VisionXPro.Application.DTOs
 {
@@ -24,6 +26,8 @@ namespace VisionXPro.Application.DTOs
         public Guid UserId { get; set; }
         public string FullName { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
+        public string? JobTitle { get; set; }
+        public List<string> Permissions { get; set; } = new();
         public Guid OrganizationId { get; set; }
         public Guid? BranchId { get; set; }
     }

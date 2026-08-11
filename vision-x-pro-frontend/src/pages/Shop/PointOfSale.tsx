@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Trash2, Box, QrCode, User, 
   CreditCard, Banknote, Loader2, X, RefreshCcw, FileText, Zap
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import api from '../../lib/api';
+import ComplianceAlertModal, { type ComplianceAlert } from '../../components/ComplianceAlertModal';
 
 export default function PointOfSale() {
   const [cart, setCart] = useState<any[]>([]);
@@ -17,17 +19,52 @@ export default function PointOfSale() {
   const [completedOrder, setCompletedOrder] = useState<any>(null);
   const [showZReport, setShowZReport] = useState(false);
   const [zReportData, setZReportData] = useState<any>(null);
+  const [complianceAlerts, setComplianceAlerts] = useState<ComplianceAlert[]>([]);
+  const [showComplianceModal, setShowComplianceModal] = useState(false);
+  const [lastOrderNumber, setLastOrderNumber] = useState('');
   
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [inventoryList, setInventoryList] = useState<any[]>([]);
   
+  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+  const [customersList, setCustomersList] = useState<any[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', segment: 'Standart' });
+
   const [showDiscount, setShowDiscount] = useState(false);
-  const [discountInput, setDiscountInput] = useState<string>(''); // Used for raw text
-  const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [, setDiscountPercent] = useState<number>(0);
+  const [discountInput, setDiscountInput] = useState('');
+  
+  // Phase 4: SGK ve Kaparo (Partial Pay)
+  const [sgkAmount, setSgkAmount] = useState<number>(0);
+  const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [isSgkActive, setIsSgkActive] = useState<boolean>(false);
+  const [isPartialPay, setIsPartialPay] = useState<boolean>(false);
   
   const [showRepModal, setShowRepModal] = useState(false);
   const [repInput, setRepInput] = useState('');
   const [salesRep, setSalesRep] = useState('Merkez Kasiyer');
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [scanMode, setScanMode] = useState(true);
+  const [serialQty, setSerialQty] = useState(1);
+  const barcodeRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const data = await api.get<any[]>('/dashboard/employees');
+        setEmployees(data);
+        if (data.length > 0) {
+          setSalesRep(data[0].fullName);
+          setRepInput(data[0].fullName);
+        }
+      } catch (err) {
+        console.error('Failed to fetch employees', err);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
   const handleNumpad = (val: string) => {
     if (val === 'C') {
@@ -39,44 +76,50 @@ export default function PointOfSale() {
     }
   };
 
-  const addItemToCart = (product: any) => {
+  const resolvedProductId = (product: any) =>
+    product?.productId ?? product?.ProductId ?? product?.id;
+
+  const addItemToCart = (product: any, qty = 1) => {
+    const pid = resolvedProductId(product);
+    if (!pid) {
+      toast.error('Ürün kimliği eksik; listeyi yenileyip tekrar deneyin.', { className: 'bg-red-50 text-red-700 border border-red-200 shadow-xl rounded-2xl font-bold' });
+      return;
+    }
     if (product.quantity <= 0) {
       toast.error("Ürün stokta yok!", { className: 'bg-red-50 text-red-700 border border-red-200 shadow-xl rounded-2xl font-bold' });
       return;
     }
+    const addCount = Math.max(1, qty);
     setCart(prev => {
-      const existing = prev.find(p => (p.productId || p.ProductId) === (product.productId || product.ProductId || product.Id));
+      const existing = prev.find(p => resolvedProductId(p) === pid);
       if (existing) {
-        if (existing.cartQuantity >= product.quantity) {
+        const nextQty = existing.cartQuantity + addCount;
+        if (nextQty > product.quantity) {
           toast.error("Maksimum stok adedine ulaştınız!", { className: 'bg-orange-50 text-orange-700 border border-orange-200 shadow-xl rounded-2xl font-bold' });
           return prev;
         }
-        return prev.map(p => (p.productId || p.ProductId) === (product.productId || product.ProductId || product.Id) 
-          ? { ...p, cartQuantity: p.cartQuantity + 1 } : p);
-      } else {
-        return [...prev, { ...product, productId: product.productId || product.ProductId || product.Id, cartQuantity: 1 }];
+        return prev.map(p => resolvedProductId(p) === pid
+          ? { ...p, cartQuantity: nextQty } : p);
       }
+      if (addCount > product.quantity) {
+        toast.error("Maksimum stok adedine ulaştınız!", { className: 'bg-orange-50 text-orange-700 border border-orange-200 shadow-xl rounded-2xl font-bold' });
+        return prev;
+      }
+      return [...prev, { ...product, productId: pid, cartQuantity: addCount }];
     });
-    toast.success("Ürün eklendi!", { className: 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xl rounded-2xl font-bold' });
+    toast.success(addCount > 1 ? `${addCount} adet eklendi!` : "Ürün eklendi!", { className: 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xl rounded-2xl font-bold' });
   };
 
   const handleSearchBarcode = async () => {
     if (!barcodeInput.trim()) return;
     setIsSearching(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5069/api/products/search?barcode=${barcodeInput}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const product = await res.json();
-        addItemToCart(product);
-        setBarcodeInput('');
-      } else {
-        toast.error("Barkod bulunamadı.", { className: 'bg-red-50 text-red-700 border border-red-200 shadow-xl rounded-2xl font-bold' });
-      }
-    } catch(err) {
-      toast.error("Bağlantı hatası.");
+      const product = await api.get(`/products/search?barcode=${barcodeInput}`);
+      addItemToCart({ ...product, productId: product.productId ?? product.ProductId, quantity: product.quantity }, serialQty);
+      setBarcodeInput('');
+      if (scanMode) barcodeRef.current?.focus();
+    } catch(err: any) {
+      toast.error(err.message || "Barkod bulunamadı.", { className: 'bg-red-50 text-red-700 border border-red-200 shadow-xl rounded-2xl font-bold' });
     } finally {
       setIsSearching(false);
     }
@@ -93,47 +136,68 @@ export default function PointOfSale() {
       toast.error("Sepet boş!", { className: 'bg-orange-50 text-orange-700 border border-orange-200 shadow-xl rounded-2xl font-bold' });
       return;
     }
+    if (!selectedCustomer) {
+      toast.error("Lütfen bir müşteri seçiniz!", { className: 'bg-red-50 text-red-700 border border-red-200 shadow-xl rounded-2xl font-bold' });
+      return;
+    }
     setIsProcessing(true);
     try {
-      const token = localStorage.getItem('token');
       const totalAmt = cart.reduce((acc, curr) => acc + (curr.salePrice * curr.cartQuantity), 0) - globalDiscount;
-      
+      const finalPaidAmount = isPartialPay ? paidAmount : (totalAmt - (isSgkActive ? sgkAmount : 0));
+
       const payload = {
-        totalAmount: totalAmt > 0 ? totalAmt : 0,
+        totalAmount: totalAmt + globalDiscount,
         discountAmount: globalDiscount,
         paymentMethod: method,
+        salesChannel: 'POS',
         salesRepresentative: salesRep,
+        customerId: selectedCustomer.id,
+        paidAmount: finalPaidAmount > 0 ? finalPaidAmount : 0,
+        sgkAmount: isSgkActive ? sgkAmount : 0,
         items: cart.map(c => ({ productId: c.productId, quantity: c.cartQuantity, unitPrice: c.salePrice }))
       };
 
-      const res = await fetch(`http://localhost:5069/api/orders`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      if (payload.items.some((i: { productId?: string }) => !i.productId)) {
+        toast.error('Sepette geçersiz ürün satırı var. Sepeti temizleyip yeniden ekleyin.');
+        setIsProcessing(false);
+        return;
+      }
+
+      const result = await api.post('/orders', payload);
+      toast.success(`Satış Onaylandı! Fiş No: ${result.orderNumber}`, { className: 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xl rounded-2xl font-bold' });
+
+      if (result.complianceAlerts?.length) {
+        setComplianceAlerts(result.complianceAlerts);
+        setLastOrderNumber(result.orderNumber);
+        setShowComplianceModal(true);
+      }
+      
+      setCompletedOrder({
+        orderNumber: result.orderNumber,
+        items: [...cart],
+        total: payload.totalAmount,
+        discount: payload.discountAmount,
+        method: method,
+        salesRep: salesRep,
+        date: new Date().toLocaleString('tr-TR')
       });
 
-      if (res.ok) {
-        const result = await res.json();
-        toast.success(`Satış Onaylandı! Fiş No: ${result.orderNumber}`, { className: 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xl rounded-2xl font-bold' });
-        
-        setCompletedOrder({
-          orderNumber: result.orderNumber,
-          items: [...cart],
-          total: payload.totalAmount,
-          discount: payload.discountAmount,
-          method: method,
-          salesRep: salesRep,
-          date: new Date().toLocaleString('tr-TR')
-        });
-
-        setCart([]);
-        setBarcodeInput('');
-        setGlobalDiscount(0);
-      } else {
-        toast.error("İşlem başarısız.");
-      }
-    } catch(err) {
-      toast.error("Bağlantı sorunu.");
+      setCart([]);
+      setBarcodeInput('');
+      setGlobalDiscount(0);
+      setSgkAmount(0);
+      setPaidAmount(0);
+      setIsSgkActive(false);
+      setIsPartialPay(false);
+      fetchInventoryItems();
+      try {
+        const refreshed = await api.get('/customers');
+        setCustomersList(refreshed);
+        const updated = refreshed.find((c: any) => c.id === selectedCustomer.id);
+        if (updated) setSelectedCustomer(updated);
+      } catch { /* keep current customer */ }
+    } catch(err: any) {
+      toast.error(err.message || "İşlem başarısız.");
     } finally {
       setIsProcessing(false);
     }
@@ -141,28 +205,25 @@ export default function PointOfSale() {
 
   const fetchZReport = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5069/api/orders/today', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setZReportData(data);
-        setShowZReport(true);
-      }
+      const data = await api.get('/orders/today');
+      setZReportData(data);
+      setShowZReport(true);
     } catch(err) { }
   };
 
   const fetchInventoryItems = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5069/api/products', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setInventoryList(await res.json());
-        setShowProductSearch(true);
-      }
+      const data = await api.get('/products');
+      setInventoryList(data);
+      setShowProductSearch(true);
+    } catch(err) { }
+  };
+
+  const fetchCustomersList = async () => {
+    try {
+      const data = await api.get('/customers');
+      setCustomersList(data);
+      setShowCustomerSearch(true);
     } catch(err) { }
   };
 
@@ -303,10 +364,33 @@ export default function PointOfSale() {
                   <span className="border-b border-dashed border-rose-400/50 pb-0.5">İskonto Tanımla</span>
                   <span className="font-bold">- ₺{globalDiscount.toLocaleString('tr-TR', {minimumFractionDigits:2})}</span>
                 </div>
-                <div className="flex justify-between items-end pt-5 mt-3 border-t border-slate-200">
-                  <span className="font-bold text-slate-800 text-xl">Toplam Tutar</span>
-                  <span className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]">₺{total.toLocaleString('tr-TR', {minimumFractionDigits:2})}</span>
+                
+                <div className="flex justify-between text-sm text-emerald-600 font-semibold mt-2 cursor-pointer hover:font-bold transition-all" onClick={() => setIsSgkActive(!isSgkActive)}>
+                  <span className="border-b border-dashed border-emerald-400/50 pb-0.5">SGK İndirimi {isSgkActive ? '(Aktif)' : '(Ekle)'}</span>
+                  {isSgkActive && <span className="font-bold">- ₺{sgkAmount.toLocaleString('tr-TR', {minimumFractionDigits:2})}</span>}
                 </div>
+                {isSgkActive && (
+                  <input type="number" min="0" value={sgkAmount} onChange={e => setSgkAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-emerald-200 rounded-xl text-sm font-bold text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-400/50" placeholder="Örn: 1500" />
+                )}
+
+                <div className="flex justify-between text-sm text-cyan-600 font-semibold mt-2 cursor-pointer hover:font-bold transition-all" onClick={() => setIsPartialPay(!isPartialPay)}>
+                  <span className="border-b border-dashed border-cyan-400/50 pb-0.5">Kaparo / Kısmi Ödeme {isPartialPay ? '(Aktif)' : '(Peşin Alınacak)'}</span>
+                  {isPartialPay && <span className="font-bold">₺{paidAmount.toLocaleString('tr-TR', {minimumFractionDigits:2})}</span>}
+                </div>
+                {isPartialPay && (
+                  <input type="number" min="0" value={paidAmount} onChange={e => setPaidAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-cyan-200 rounded-xl text-sm font-bold text-cyan-700 bg-cyan-50 outline-none focus:ring-2 focus:ring-cyan-400/50" placeholder="Alınan Kaparo (Örn: 2000)" />
+                )}
+
+                <div className="flex justify-between items-end pt-4 mt-3 border-t border-slate-200">
+                  <span className="font-bold text-slate-800 text-xl">Tahsil Edilecek</span>
+                  <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 drop-shadow-md">₺{isPartialPay ? paidAmount.toLocaleString('tr-TR') : Math.max(0, total - (isSgkActive ? sgkAmount : 0)).toLocaleString('tr-TR')}</span>
+                </div>
+                {isPartialPay && (
+                   <div className="flex justify-between text-xs text-rose-600 font-bold bg-rose-50 px-3 py-2 rounded-xl border border-rose-100">
+                     <span>Kalan Bakiye (Borç)</span>
+                     <span>₺{Math.max(0, total - (isSgkActive ? sgkAmount : 0) - paidAmount).toLocaleString('tr-TR')}</span>
+                   </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -322,27 +406,55 @@ export default function PointOfSale() {
                 <div className="flex-1 flex flex-col relative z-10">
                   <div className="flex justify-between items-center mb-8">
                      <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight drop-shadow-md">Seri İşlem</h3>
-                     <motion.button whileTap={btnTap} className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 shadow-inner text-sm font-bold text-cyan-700 flex items-center gap-2 hover:bg-slate-100 transition-all hover:shadow-[0_0_20px_rgba(34,211,238,0.3)]">
-                        <QrCode className="w-4 h-4"/> Okuyucu Aktif
+                     <motion.button
+                       type="button"
+                       whileTap={btnTap}
+                       onClick={() => {
+                         setScanMode(v => !v);
+                         if (!scanMode) setTimeout(() => barcodeRef.current?.focus(), 50);
+                       }}
+                       className={`px-5 py-2.5 rounded-xl border shadow-inner text-sm font-bold flex items-center gap-2 transition-all ${scanMode ? 'bg-cyan-100 border-cyan-300 text-cyan-800' : 'bg-white border-slate-200 text-cyan-700 hover:bg-slate-100'}`}
+                     >
+                        <QrCode className="w-4 h-4"/> {scanMode ? 'Okuyucu Aktif' : 'Okuyucu Kapalı'}
                      </motion.button>
+                  </div>
+
+                  <div className="flex items-center gap-3 mb-3">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Seri Adet</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={serialQty}
+                      onChange={e => setSerialQty(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-24 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-black text-slate-800 outline-none focus:border-cyan-400"
+                    />
+                    <span className="text-xs font-semibold text-slate-400">Her okutmada sepete eklenecek miktar</span>
                   </div>
                   
                   <div className="relative group mb-10 flex-1 flex flex-col justify-center">
                     <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-purple-100 rounded-[2.5rem] blur-xl opacity-30 group-focus-within:opacity-60 transition-opacity duration-500"></div>
                     <form onSubmit={(e) => { e.preventDefault(); handleSearchBarcode(); }} className="relative flex items-center bg-slate-50 border-slate-200 border border-slate-200 rounded-[2.5rem] overflow-hidden focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-400/20 transition-all shadow-2xl backdrop-blur-md">
-                       <Search className="w-8 h-8 text-cyan-700 ml-8 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]" />
-                       <input 
-                         type="text" 
+                       <button type="button" onClick={fetchInventoryItems} className="ml-8 p-2 rounded-full hover:bg-slate-100 transition-colors focus:outline-none focus:ring-4 focus:ring-cyan-500/20 active:scale-95" title="Manuel Ürün Ara">
+                         <Search className="w-8 h-8 text-cyan-700 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]" />
+                       </button>
+                       <input
+                         ref={barcodeRef}
+                         type="text"
                          value={barcodeInput}
                          onChange={e => setBarcodeInput(e.target.value)}
-                         className="w-full bg-transparent border-none py-8 px-6 text-4xl font-black text-slate-800 border-none outline-none placeholder-white/20 tracking-widest"
-                         placeholder="1010..."
+                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearchBarcode(); } }}
+                         autoFocus={scanMode}
+                         className="w-full bg-transparent border-none py-8 px-6 text-4xl font-black text-slate-800 border-none outline-none placeholder-slate-300 tracking-widest"
+                         placeholder="Barkod okutun..."
                        />
-                       {barcodeInput && (
-                         <button type="button" onClick={() => setBarcodeInput('')} className="mr-6 p-4 text-slate-800/40 hover:text-rose-600 hover:bg-rose-500/10 rounded-2xl transition-all">
-                           <X className="w-8 h-8"/>
-                         </button>
-                       )}
+                       <div className="flex items-center gap-2 mr-6">
+                         <button type="submit" disabled={isSearching || !barcodeInput.trim()} className="px-5 py-3 bg-cyan-500 disabled:opacity-40 text-white font-bold rounded-2xl hover:bg-cyan-600 transition-colors shadow-md">Ekle</button>
+                         {barcodeInput && (
+                           <button type="button" onClick={() => setBarcodeInput('')} className="p-3 text-slate-800/40 hover:text-rose-600 hover:bg-rose-500/10 rounded-2xl transition-all">
+                             <X className="w-8 h-8"/>
+                           </button>
+                         )}
+                       </div>
                     </form>
                   </div>
 
@@ -419,12 +531,36 @@ export default function PointOfSale() {
                    </div>
 
                    <div className="space-y-4 flex-1 flex flex-col justify-end relative z-10">
-                      <div className="p-8 rounded-[2rem] bg-slate-50 border-slate-200 border border-slate-200 shadow-inner flex flex-col items-center justify-center gap-4 text-slate-500 my-auto">
-                         <div className="w-20 h-20 rounded-full bg-white border border-slate-300 flex items-center justify-center shadow-lg mb-2">
-                           <User className="w-10 h-10 text-slate-500" />
-                         </div>
-                         <span className="text-md font-bold text-center text-slate-800/80">Kayıtsız Hızlı Satış Modu<br/><span className="text-xs font-medium text-slate-500">(Ziyaretçi Müşteri)</span></span>
-                      </div>
+                      {selectedCustomer ? (
+                        <div className="p-6 rounded-[2rem] bg-indigo-50 border border-indigo-200 shadow-inner flex flex-col gap-2 relative group cursor-pointer" onClick={fetchCustomersList}>
+                           <div className="absolute top-4 right-4 bg-white p-2 rounded-xl shadow-sm text-indigo-600 font-bold text-xs group-hover:bg-indigo-100 transition-colors">Değiştir</div>
+                           <h5 className="font-black text-xl text-indigo-900 drop-shadow-sm">{selectedCustomer.name}</h5>
+                           <p className="text-sm font-semibold text-indigo-700/80">{selectedCustomer.phone}</p>
+                           <div className="mt-2 text-xs font-bold bg-white/50 border border-indigo-200 inline-block px-3 py-1 rounded-lg text-indigo-800 shadow-sm w-max">
+                             Segment: {selectedCustomer.status}
+                           </div>
+                           {selectedCustomer.pastOrders?.length > 0 && (
+                             <div className="mt-4 pt-3 border-t border-indigo-200/60">
+                               <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600 mb-2">Son alışverişler</p>
+                               <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                                 {selectedCustomer.pastOrders.slice(0, 5).map((ord: any, i: number) => (
+                                   <div key={i} className="text-xs font-semibold text-indigo-900/90 flex justify-between gap-2">
+                                     <span className="truncate">{ord.product}</span>
+                                     <span className="shrink-0">₺{Number(ord.amount).toLocaleString('tr-TR')}</span>
+                                   </div>
+                                 ))}
+                               </div>
+                             </div>
+                           )}
+                        </div>
+                      ) : (
+                        <div onClick={fetchCustomersList} className="p-8 rounded-[2rem] bg-slate-50 border-slate-200 border border-dashed hover:border-indigo-400 hover:bg-indigo-50/50 shadow-inner flex flex-col items-center justify-center gap-4 text-slate-500 my-auto cursor-pointer transition-all group">
+                           <div className="w-16 h-16 rounded-full bg-white border border-slate-300 flex items-center justify-center shadow-md mb-2 group-hover:border-indigo-400 group-hover:text-indigo-600 transition-colors">
+                             <Search className="w-8 h-8" />
+                           </div>
+                           <span className="text-md font-bold text-center text-slate-800/80 group-hover:text-indigo-700">Müşteri Seçimi Zorunlu<br/><span className="text-xs font-medium text-slate-500">(Satış için tıklayın)</span></span>
+                        </div>
+                      )}
                    </div>
                 </motion.div>
 
@@ -481,43 +617,66 @@ export default function PointOfSale() {
         )}
 
         {/* Z Raporu Modal */}
-        {showZReport && zReportData && (
+        {showZReport && zReportData && (() => {
+          const totalRevenue = zReportData.totalRevenue ?? zReportData.TotalRevenue ?? 0;
+          const totalOrders = zReportData.totalOrders ?? zReportData.TotalOrders ?? 0;
+          const cashTotal = zReportData.cashTotal ?? 0;
+          const cardTotal = zReportData.cardTotal ?? 0;
+          const transferTotal = zReportData.transferTotal ?? 0;
+          const sgkTotal = zReportData.sgkTotal ?? 0;
+          const totalPaid = zReportData.totalPaid ?? 0;
+          const ordersList = zReportData.ordersList ?? zReportData.OrdersList ?? [];
+          return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 print:hidden">
             <motion.div initial={{ scale: 0.95, y: 30 }} animate={{ scale: 1, y: 0 }} className="bg-white rounded-[3rem] shadow-2xl w-full max-w-xl overflow-hidden flex flex-col border border-slate-200">
                <div className="p-8 bg-gradient-to-r from-indigo-50 to-purple-50 text-slate-800 flex justify-between items-center border-b border-slate-200">
                   <div>
-                    <h2 className="text-2xl font-black drop-shadow-md">Kozmik Z-Raporu</h2>
-                    <p className="text-sm text-indigo-700 mt-1 font-semibold">Günün Satış Bilançosu</p>
+                    <h2 className="text-2xl font-black drop-shadow-md">Gün Sonu Z-Raporu</h2>
+                    <p className="text-sm text-indigo-700 mt-1 font-semibold">Bugünkü satış özeti</p>
                   </div>
                   <button onClick={() => setShowZReport(false)} className="text-slate-800/50 hover:text-slate-800 bg-white p-3 rounded-xl border border-slate-200 transition-colors"><X className="w-6 h-6"/></button>
                </div>
                <div className="p-8 grid grid-cols-2 gap-6 bg-white">
-                  <div className="bg-white0 p-6 rounded-[2rem] border border-slate-100 shadow-inner text-center">
+                  <div className="p-6 rounded-[2rem] border border-slate-100 shadow-inner text-center">
                      <p className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-widest">Sistem Cirosu</p>
-                     <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400 text-white drop-shadow-md">{zReportData.totalRevenue.toLocaleString('tr-TR')} ₺</p>
+                     <p className="text-4xl font-black text-emerald-600">{Number(totalRevenue).toLocaleString('tr-TR')} ₺</p>
                   </div>
-                  <div className="bg-white0 p-6 rounded-[2rem] border border-slate-100 shadow-inner text-center">
-                     <p className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-widest">Adet / Hacim</p>
-                     <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 drop-shadow-md">{zReportData.totalOrders} Sipariş</p>
+                  <div className="p-6 rounded-[2rem] border border-slate-100 shadow-inner text-center">
+                     <p className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-widest">Adet / Tahsilat</p>
+                     <p className="text-2xl font-black text-indigo-600">{totalOrders} sipariş</p>
+                     <p className="text-sm font-bold text-slate-500 mt-1">Tahsil: {Number(totalPaid).toLocaleString('tr-TR')} ₺</p>
                   </div>
                </div>
+               <div className="px-8 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm font-bold text-emerald-800">Nakit: {Number(cashTotal).toLocaleString('tr-TR')} ₺</div>
+                  <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm font-bold text-blue-800">Kart: {Number(cardTotal).toLocaleString('tr-TR')} ₺</div>
+                  <div className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3 text-sm font-bold text-violet-800">Havale: {Number(transferTotal).toLocaleString('tr-TR')} ₺</div>
+                  <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm font-bold text-amber-800">SGK: {Number(sgkTotal).toLocaleString('tr-TR')} ₺</div>
+               </div>
                <div className="p-8 pt-4 bg-white overflow-y-auto max-h-72 scrollbar-hide">
-                  <h3 className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-widest border-b border-slate-100 pb-2">Canlı İşlem Logu</h3>
-                  {zReportData.ordersList.length === 0 ? (
-                    <p className="text-sm text-slate-500 font-medium py-4 text-center">Gölge sessiz, henüz işlem yok.</p>
-                  ) : zReportData.ordersList.map((ord:any, i:number) => (
-                    <div key={i} className="flex justify-between items-center py-4 border-b border-slate-100 last:border-0 hover:bg-white px-4 rounded-2xl transition-colors cursor-default">
+                  <h3 className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-widest border-b border-slate-100 pb-2">Bugünkü Siparişler</h3>
+                  {ordersList.length === 0 ? (
+                    <p className="text-sm text-slate-500 font-medium py-4 text-center">Bugün henüz sipariş yok.</p>
+                  ) : ordersList.map((ord:any, i:number) => (
+                    <div key={i} className="flex justify-between items-center py-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-4 rounded-2xl transition-colors cursor-default">
                        <div className="flex items-center gap-4">
-                         <div className="bg-slate-700/50 px-3 py-1 rounded-lg text-xs font-bold text-slate-600 border border-slate-100">{ord.time}</div>
-                         <span className="font-bold text-slate-800 tracking-wide">{ord.orderNumber}</span>
+                         <div className="bg-slate-100 px-3 py-1 rounded-lg text-xs font-bold text-slate-600 border border-slate-100">{ord.time ?? ord.Time}</div>
+                         <div>
+                           <span className="font-bold text-slate-800 tracking-wide block">{ord.orderNumber ?? ord.OrderNumber}</span>
+                           <span className="text-[10px] font-bold text-slate-400 uppercase">{ord.salesChannel ?? ''} · {ord.salesRepresentative ?? ord.salesRep ?? '—'}</span>
+                         </div>
                        </div>
-                       <div className="font-black text-cyan-700 text-lg">{ord.totalAmount.toLocaleString('tr-TR')} ₺</div>
+                       <div className="font-black text-cyan-700 text-lg">{Number(ord.totalAmount ?? ord.TotalAmount ?? 0).toLocaleString('tr-TR')} ₺</div>
                     </div>
                   ))}
                </div>
+               <div className="p-6 border-t border-slate-100 print:hidden">
+                 <button onClick={() => window.print()} className="w-full py-3 rounded-2xl bg-slate-800 text-white font-bold text-sm">Yazdır</button>
+               </div>
             </motion.div>
           </motion.div>
-        )}
+          );
+        })()}
 
         {/* Product Search Modal */}
         {showProductSearch && (
@@ -535,7 +694,7 @@ export default function PointOfSale() {
                </div>
                <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3 bg-white scrollbar-hide">
                   {inventoryList.map((prod:any) => (
-                    <div key={prod.id || prod.productId} className="flex justify-between items-center p-5 bg-white border border-slate-200 rounded-[1.5rem] hover:bg-slate-100 hover:border-cyan-500/50 transition-all group">
+                    <div key={prod.productId || prod.id} className="flex justify-between items-center p-5 bg-white border border-slate-200 rounded-[1.5rem] hover:bg-slate-100 hover:border-cyan-500/50 transition-all group">
                        <div>
                          <h4 className="font-bold text-slate-800 text-lg">{prod.name}</h4>
                          <div className="flex items-center gap-3 mt-2">
@@ -545,10 +704,112 @@ export default function PointOfSale() {
                        </div>
                        <div className="flex items-center gap-6">
                          <span className="font-black text-2xl text-slate-800 drop-shadow-md">{prod.salePrice.toLocaleString('tr-TR')} ₺</span>
-                         <button onClick={() => { addItemToCart({...prod, productId: prod.id}); setShowProductSearch(false); }} className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 text-slate-800 font-black text-sm rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all">ZIMBALA</button>
+                         <button onClick={() => { addItemToCart({ ...prod, productId: prod.productId }); setShowProductSearch(false); }} className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 text-slate-800 font-black text-sm rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all">ZIMBALA</button>
                        </div>
                     </div>
                   ))}
+               </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Customer Search Modal */}
+        {showCustomerSearch && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 print:hidden">
+            <motion.div initial={{ scale: 0.95, y: 30 }} animate={{ scale: 1, y: 0 }} className="bg-white rounded-[3rem] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col h-[70vh] border border-slate-200">
+               <div className="p-8 border-b border-slate-200 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-blue-50">
+                  <h2 className="text-2xl font-black text-slate-800 tracking-wide flex items-center gap-3"><User className="w-6 h-6 text-indigo-600"/> Müşteri Seçimi</h2>
+                  <button onClick={() => setShowCustomerSearch(false)} className="text-slate-500 hover:text-slate-800 bg-white p-3 rounded-xl border border-slate-200"><X className="w-6 h-6"/></button>
+               </div>
+               <div className="p-6 bg-white border-b border-slate-100 shadow-inner flex gap-4 items-center">
+                  <div className="flex flex-1 bg-slate-50 border-slate-200 items-center px-6 py-4 rounded-[2rem] border border-slate-200 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                    <Search className="w-6 h-6 text-indigo-700 mr-4" />
+                    <input type="text" placeholder="İsim veya Telefon arayın..." className="bg-transparent border-none outline-none w-full text-lg font-bold text-slate-800 placeholder-slate-400" />
+                  </div>
+                  {!isAddingCustomer && (
+                    <button onClick={() => setIsAddingCustomer(true)} className="px-6 py-4 bg-indigo-600 text-white font-bold rounded-[2rem] hover:bg-indigo-700 transition-colors whitespace-nowrap">
+                      Yeni Müşteri Ekle
+                    </button>
+                  )}
+               </div>
+               <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3 bg-white scrollbar-hide">
+                  {isAddingCustomer ? (
+                     <div className="space-y-4">
+                        <div>
+                          <label className="text-sm font-bold text-slate-700 mb-1 block">Ad Soyad</label>
+                          <input type="text" value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-800 outline-none focus:border-indigo-500" placeholder="Örn: Ahmet Yılmaz"/>
+                        </div>
+                        <div>
+                          <label className="text-sm font-bold text-slate-700 mb-1 block">Telefon</label>
+                          <input type="tel" value={newCustomer.phone} onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-800 outline-none focus:border-indigo-500" placeholder="Örn: 0555 123 45 67"/>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-bold text-slate-700 mb-1 block">E-posta (Opsiyonel)</label>
+                            <input type="email" value={newCustomer.email} onChange={e => setNewCustomer({...newCustomer, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-800 outline-none focus:border-indigo-500" placeholder="Örn: ahmet@mail.com"/>
+                          </div>
+                          <div>
+                            <label className="text-sm font-bold text-slate-700 mb-1 block">Müşteri Tipi</label>
+                            <select value={newCustomer.segment} onChange={e => setNewCustomer({...newCustomer, segment: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-800 outline-none focus:border-indigo-500">
+                               <option value="Standart">Standart</option>
+                               <option value="VIP">VIP</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-4 mt-6">
+                           <button onClick={() => setIsAddingCustomer(false)} className="px-6 py-3 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 flex-1">İptal</button>
+                           <button onClick={async () => {
+                               if (!newCustomer.name || !newCustomer.phone) {
+                                 toast.error('Ad Soyad ve Telefon zorunludur!');
+                                 return;
+                               }
+                               try {
+                                 const data = await api.post('/customers', {
+                                   name: newCustomer.name,
+                                   phone: newCustomer.phone,
+                                   email: newCustomer.email || undefined,
+                                   segment: newCustomer.segment,
+                                   source: 'Manuel-POS',
+                                 });
+                                 const created = {
+                                   id: data.id,
+                                   name: data.name ?? newCustomer.name,
+                                   phone: data.phone ?? newCustomer.phone,
+                                   status: newCustomer.segment,
+                                   lastVisit: 'Bugün',
+                                   source: 'Manuel-POS',
+                                 };
+                                 setCustomersList([created, ...customersList]);
+                                 setSelectedCustomer(created);
+                                 setNewCustomer({ name: '', phone: '', email: '', segment: 'Standart' });
+                                 setIsAddingCustomer(false);
+                                 setShowCustomerSearch(false);
+                                 toast.success('Müşteri kaydedildi ve seçildi!');
+                               } catch(err: any) {
+                                 toast.error(err.message || 'Bağlantı hatası; müşteri kaydı yapılamadı.');
+                               }
+                           }} className="px-6 py-3 bg-emerald-500 text-white font-bold rounded-2xl hover:bg-emerald-600 flex-1 shadow-lg shadow-emerald-200">Kaydet & Seç</button>
+                        </div>
+                     </div>
+                  ) : (
+                    <>
+                      {customersList.map((cust:any) => (
+                        <div key={cust.id} onClick={() => { setSelectedCustomer(cust); setShowCustomerSearch(false); }} className="flex justify-between items-center p-5 bg-white border border-slate-200 rounded-[1.5rem] hover:bg-indigo-50 hover:border-indigo-300 transition-all cursor-pointer group">
+                           <div>
+                             <h4 className="font-bold text-slate-800 text-lg group-hover:text-indigo-800">{cust.name}</h4>
+                             <p className="text-sm font-semibold text-slate-500 mt-1">{cust.phone}</p>
+                           </div>
+                           <div className="flex flex-col items-end">
+                             <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2.5 py-1 rounded-md mb-2">{cust.status}</span>
+                             <span className="text-xs text-slate-400 font-medium">{cust.lastVisit}</span>
+                           </div>
+                        </div>
+                      ))}
+                      {customersList.length === 0 && (
+                         <div className="text-center text-slate-500 font-bold py-10">Müşteri bulunamadı. Lütfen "Yeni Müşteri Ekle" butonuyla anında kayıt oluşturun.</div>
+                      )}
+                    </>
+                  )}
                </div>
             </motion.div>
           </motion.div>
@@ -644,14 +905,17 @@ export default function PointOfSale() {
                </div>
                <h2 className="text-2xl font-black text-slate-800 mb-2">Satış Sorumlusu</h2>
                <p className="text-sm text-slate-500 mb-6">Bu siparişi hangi optisyen / personel tamamlıyor?</p>
-               <input 
-                 type="text" 
+               <select 
                  value={repInput}
                  onChange={(e) => setRepInput(e.target.value)}
                  className="w-full bg-slate-50 border border-slate-300 py-3 px-4 rounded-xl text-lg font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 mb-6 text-center"
-                 placeholder="İsim giriniz..."
-                 autoFocus
-               />
+               >
+                 <option value="">-- Personel Seçin --</option>
+                 {employees.map(emp => (
+                    <option key={emp.id} value={emp.fullName}>{emp.fullName} ({emp.role})</option>
+                 ))}
+                 <option value="Merkez Kasiyer">Merkez Kasiyer</option>
+               </select>
                <div className="grid grid-cols-2 gap-4">
                  <button onClick={() => setShowRepModal(false)} className="py-3 font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors">Vazgeç</button>
                  <button onClick={() => { setSalesRep(repInput || 'Belirtilmedi'); setShowRepModal(false); }} className="py-3 font-black text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors">Yetkilendir</button>
@@ -661,6 +925,13 @@ export default function PointOfSale() {
         )}
 
       </AnimatePresence>
+
+      <ComplianceAlertModal
+        open={showComplianceModal}
+        orderNumber={lastOrderNumber}
+        alerts={complianceAlerts}
+        onClose={() => setShowComplianceModal(false)}
+      />
     </div>
   );
 }

@@ -1,27 +1,100 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Building2, Globe, HeartPulse, Receipt, Save, 
   ShieldCheck, Smartphone, Settings as SettingsIcon, Link2,
-  MessageSquare, Users, BellRing, Gift, UserPlus, Key
+  MessageSquare, BellRing, Gift, Loader2, AlertTriangle,
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import api from '../../lib/api';
+import CompliancePendingQueue from '../../components/CompliancePendingQueue';
+
+interface SettingsData {
+  storeName: string;
+  taxOffice: string;
+  taxNumber: string;
+  phone: string;
+  address: string;
+  medulaFacilityCode: string;
+  medulaPassword: string;
+  medulaRegistryNo: string;
+  utsToken: string;
+  utsGlnCode: string;
+  smsProvider: string;
+  smsApiToken: string;
+  smsSenderHeader: string;
+  smsReadyNotification: boolean;
+  smsBirthdayCampaign: boolean;
+  receiptFooter: string;
+  showPriceOnLabel: boolean;
+}
+
+const defaultSettings: SettingsData = {
+  storeName: '',
+  taxOffice: '',
+  taxNumber: '',
+  phone: '',
+  address: '',
+  medulaFacilityCode: '',
+  medulaPassword: '',
+  medulaRegistryNo: '',
+  utsToken: '',
+  utsGlnCode: '',
+  smsProvider: 'NetGsm T.A.Ş.',
+  smsApiToken: '',
+  smsSenderHeader: 'VISIONXPRO',
+  smsReadyNotification: true,
+  smsBirthdayCampaign: true,
+  receiptFooter: 'Bizi tercih ettiğiniz için teşekkür ederiz. Değişim işlemi 15 gün içinde fiş ile yapılmaktadır.',
+  showPriceOnLabel: true,
+};
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('genel');
-  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [settings, setSettings] = useState<SettingsData>(defaultSettings);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [complianceStatus, setComplianceStatus] = useState<any>(null);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 800)),
-      {
-        loading: 'Sistemle senkronize ediliyor...',
-        success: 'Ayarlar başarıyla kaydedildi!',
-        error: 'Kaydedilirken hata oluştu.',
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const data = await api.get<SettingsData>('/shop-settings');
+        setSettings({ ...defaultSettings, ...data });
+      } catch (err) {
+        console.error('Ayarlar yüklenemedi:', err);
+      } finally {
+        setIsLoading(false);
       }
-    );
+    };
+    fetchSettings();
+    api.get('/compliance/status').then(setComplianceStatus).catch(() => {});
+  }, []);
+
+  const updateField = (field: keyof SettingsData, value: string | boolean) => {
+    setSettings(prev => ({ ...prev, [field]: value }));
   };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await api.put('/shop-settings', settings);
+      toast.success('Ayarlar başarıyla kaydedildi!');
+    } catch (err: any) {
+      toast.error(err.message || 'Kaydedilirken hata oluştu.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-80px)] p-6 lg:p-8 relative overflow-hidden bg-gradient-to-br from-[#F8FAFC] via-[#E2E8F0] to-[#CBD5E1] flex flex-col font-sans">
@@ -51,7 +124,6 @@ export default function Settings() {
              <TabButton id="uts" icon={<Globe />} title="Ürün Takip (ÜTS)" desc="Bakanlık Bildirimleri" active={activeTab} setActive={setActiveTab} />
              <TabButton id="fatura" icon={<Receipt />} title="Satış ve Fiş" desc="Matbu evrak dizaynı" active={activeTab} setActive={setActiveTab} />
              <TabButton id="sms" icon={<MessageSquare />} title="SMS & İletişim" desc="Otomatik mesajlar" active={activeTab} setActive={setActiveTab} />
-             <TabButton id="staff" icon={<Users />} title="Personel & Yetki" desc="Kadronuz ve primler" active={activeTab} setActive={setActiveTab} />
            </nav>
         </div>
 
@@ -71,13 +143,18 @@ export default function Settings() {
                         <p className="text-slate-500 text-sm font-bold mt-1">Fatura, fiş ve raporlarda basılacak resmi isminizi belirleyin.</p>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InputGroup label="Şube Resmi Adı" defaultValue="Merkez Optik Tic. Ltd. Şti." />
-                        <InputGroup label="Vergi Dairesi" defaultValue="Marmara V.D." />
-                        <InputGroup label="Vergi/TC Kimlik Numarası" defaultValue="1234567890" />
-                        <InputGroup label="İletişim Telefonu" defaultValue="0212 555 44 33" icon={<Smartphone/>} />
+                        <InputGroup label="Şube Resmi Adı" value={settings.storeName} onChange={v => updateField('storeName', v)} />
+                        <InputGroup label="Vergi Dairesi" value={settings.taxOffice} onChange={v => updateField('taxOffice', v)} />
+                        <InputGroup label="Vergi/TC Kimlik Numarası" value={settings.taxNumber} onChange={v => updateField('taxNumber', v)} />
+                        <InputGroup label="İletişim Telefonu" value={settings.phone} onChange={v => updateField('phone', v)} icon={<Smartphone/>} />
                         <div className="col-span-1 md:col-span-2">
                           <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Tam Adres</label>
-                          <textarea className="w-full text-sm font-bold py-3 px-4 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/20 border border-white/60 bg-white/60 shadow-sm" rows={3}>Atatürk Mah. İstiklal Cad. No: 123 Kadıköy/İstanbul</textarea>
+                          <textarea 
+                            value={settings.address} 
+                            onChange={e => updateField('address', e.target.value)}
+                            className="w-full text-sm font-bold py-3 px-4 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/20 border border-white/60 bg-white/60 shadow-sm" 
+                            rows={3}
+                          />
                         </div>
                       </div>
                    </motion.div>
@@ -93,19 +170,29 @@ export default function Settings() {
                           </h3>
                           <p className="text-slate-500 text-sm font-bold mt-1">Cam ve Çerçeve haklarını anlık sorgulamak için.</p>
                         </div>
-                        <div className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-black rounded-lg border border-emerald-200">
-                          Medula Servisi Aktif
+                        <div className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-black rounded-lg border border-amber-200">
+                          Kimlik bilgisi kayıt (API yok)
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
-                        <InputGroup label="Medula Tesis Kodu" defaultValue="11340001" />
-                        <InputGroup label="Sistem Şifresi" type="password" defaultValue="*********" />
-                        <InputGroup label="E-Devlet Sicil No" defaultValue="412356" />
+                        <InputGroup label="Medula Tesis Kodu" value={settings.medulaFacilityCode} onChange={v => updateField('medulaFacilityCode', v)} />
+                        <InputGroup label="Sistem Şifresi" type="password" value={settings.medulaPassword} onChange={v => updateField('medulaPassword', v)} />
+                        <InputGroup label="E-Devlet Sicil No" value={settings.medulaRegistryNo} onChange={v => updateField('medulaRegistryNo', v)} />
                       </div>
-                      <div className="p-4 rounded-xl bg-orange-50 border border-orange-200 text-orange-800 flex gap-3 text-sm font-bold mt-4">
-                        <ShieldCheck className="w-5 h-5 shrink-0" />
-                        <p>Şifreleriniz 256-bit AES ile şifrelenerek saklanmaktadır. SGK şifreni değiştiğinde lütfen burayı da güncelleyin.</p>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3 text-amber-900 text-sm font-medium mt-4">
+                        <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
+                        <div>
+                          <p className="font-black">Hazırlık modu aktif</p>
+                          <p className="mt-1 text-amber-800/90">Canlı Medula sorgusu yok. SGK tutarı POS’ta girilir; satış sonrası bildirim kuyruğuna düşer.</p>
+                          {complianceStatus && (
+                            <p className="mt-2 text-xs font-bold">
+                              Bekleyen Medula: {complianceStatus.pendingMedula ?? 0} •
+                              Kimlik: {complianceStatus.medulaConfigured ? 'Kayıtlı' : 'Eksik'}
+                            </p>
+                          )}
+                        </div>
                       </div>
+                      <CompliancePendingQueue type="Medula" />
                    </motion.div>
                  )}
 
@@ -119,14 +206,28 @@ export default function Settings() {
                         <p className="text-slate-500 text-sm font-bold mt-1">Stok bildirimleri ve satışı yapılan barkodların düşülme ayarları.</p>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
-                        <InputGroup label="ÜTS Sistem Jetonu (Token)" type="password" defaultValue="uts_liv_19284758a9dk" />
-                        <InputGroup label="Kurum Gln Numarası" defaultValue="8681234567890" />
-                        <div className="col-span-1 md:col-span-2 pt-2">
-                           <button type="button" onClick={() => toast.success('ÜTS sunucularıyla bağlantı başarılı! (0.42ms)')} className="px-5 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors rounded-xl text-sm font-black shadow-sm flex items-center gap-2">
-                             <Link2 className="w-4 h-4" /> Bağlantıyı Sına
+                        <InputGroup label="ÜTS Sistem Jetonu (Token)" type="password" value={settings.utsToken} onChange={v => updateField('utsToken', v)} />
+                        <InputGroup label="Kurum Gln Numarası" value={settings.utsGlnCode} onChange={v => updateField('utsGlnCode', v)} />
+                        <div className="col-span-1 md:col-span-2 pt-2 space-y-3">
+                           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 flex gap-3 text-blue-900 text-sm font-medium">
+                             <AlertTriangle className="w-5 h-5 shrink-0" />
+                             <div>
+                               <p className="font-black">ÜTS hazırlık modu</p>
+                               <p className="mt-1">ÜTS’li ürün satışında kare kodlar otomatik kuyruğa eklenir. Stokta ÜTS kodu olan ürünler envanterde mavi rozetle işaretlenir.</p>
+                               {complianceStatus && (
+                                 <p className="mt-2 text-xs font-bold">
+                                   Bekleyen ÜTS: {complianceStatus.pendingUts ?? 0} •
+                                   Token/GLN: {complianceStatus.utsConfigured ? 'Kayıtlı' : 'Eksik'}
+                                 </p>
+                               )}
+                             </div>
+                           </div>
+                           <button type="button" onClick={() => toast('Canlı ÜTS API bağlantısı bir sonraki sürümde. Token/GLN kayıt altına alınır.', { className: 'bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-semibold text-sm' })} className="px-5 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors rounded-xl text-sm font-black shadow-sm flex items-center gap-2">
+                             <Link2 className="w-4 h-4" /> Bağlantıyı Sına (Simülasyon)
                            </button>
                         </div>
                       </div>
+                      <CompliancePendingQueue type="UTS" />
                    </motion.div>
                  )}
 
@@ -142,11 +243,21 @@ export default function Settings() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="col-span-1 md:col-span-2">
                           <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Fiş Alt Bilgi Notu (Footer)</label>
-                          <textarea className="w-full text-sm font-bold py-3 px-4 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/20 border border-white/60 bg-white/60 shadow-sm" rows={2} defaultValue="Bizi tercih ettiğiniz için teşekkür ederiz. Değişim işlemi 15 gün içinde fiş ile yapılmaktadır."></textarea>
+                          <textarea 
+                            value={settings.receiptFooter}
+                            onChange={e => updateField('receiptFooter', e.target.value)}
+                            className="w-full text-sm font-bold py-3 px-4 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/20 border border-white/60 bg-white/60 shadow-sm" 
+                            rows={2}
+                          />
                         </div>
                         <div className="col-span-1 md:col-span-2">
                            <label className="flex items-center gap-3 p-4 bg-white/80 rounded-xl border border-white shadow-sm cursor-pointer hover:bg-white transition-colors">
-                             <input type="checkbox" defaultChecked className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 border-gray-300" />
+                             <input 
+                               type="checkbox" 
+                               checked={settings.showPriceOnLabel}
+                               onChange={e => updateField('showPriceOnLabel', e.target.checked)}
+                               className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 border-gray-300" 
+                             />
                              <div>
                                <p className="text-sm font-black text-slate-800">Termal etikette (barkod) raf fiyatı gösterilsin</p>
                                <p className="text-xs font-semibold text-slate-500 mt-1">Ürün barkodlarını rafta sergilerken fiyat açık yazılsın.</p>
@@ -171,19 +282,24 @@ export default function Settings() {
                          <div className="absolute top-0 right-0 p-4 opacity-10"><MessageSquare className="w-32 h-32"/></div>
                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10"><Link2 className="w-4 h-4"/> Servis Ayarları</h4>
                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
-                            <InputGroup label="Sağlayıcı (Provider)" defaultValue="NetGsm T.A.Ş." />
-                            <InputGroup label="API Token / Anahtar" type="password" defaultValue="netgsm_live_token_77a9dk" />
-                            <InputGroup label="Gönderici Başlığı (Header)" defaultValue="VISIONXPRO" />
+                            <InputGroup label="Sağlayıcı (Provider)" value={settings.smsProvider} onChange={v => updateField('smsProvider', v)} />
+                            <InputGroup label="API Token / Anahtar" type="password" value={settings.smsApiToken} onChange={v => updateField('smsApiToken', v)} />
+                            <InputGroup label="Gönderici Başlığı (Header)" value={settings.smsSenderHeader} onChange={v => updateField('smsSenderHeader', v)} />
                          </div>
                          <div className="mt-4 pt-4 border-t border-slate-200 relative z-10 flex gap-3 items-center">
-                            <button type="button" onClick={() => toast.success('Test mesajı 0555***4433 numarasına iletildi!', { icon: '📲' })} className="px-5 py-2.5 bg-blue-600 text-white hover:bg-blue-700 transition-colors rounded-xl text-sm font-black shadow-md flex items-center gap-2">Test SMS'i Gönder</button>
+                            <button type="button" onClick={() => toast('SMS gönderimi bu sürümde bağlı değil; sağlayıcı bilgileri kayıt için tutulur.', { className: 'bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-semibold text-sm' })} className="px-5 py-2.5 bg-blue-600 text-white hover:bg-blue-700 transition-colors rounded-xl text-sm font-black shadow-md flex items-center gap-2">Test SMS'i Gönder</button>
                             <span className="text-xs font-bold text-slate-500">Mevcut Bakiye: 4,850 SMS</span>
                          </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <label className="flex items-start gap-4 p-5 bg-white/80 rounded-2xl border border-white shadow-sm cursor-pointer hover:bg-white transition-colors relative group">
-                           <input type="checkbox" defaultChecked className="mt-1 w-5 h-5 rounded text-blue-600 focus:ring-blue-500 focus:ring-offset-0 border-gray-300" />
+                           <input 
+                             type="checkbox" 
+                             checked={settings.smsReadyNotification}
+                             onChange={e => updateField('smsReadyNotification', e.target.checked)}
+                             className="mt-1 w-5 h-5 rounded text-blue-600 focus:ring-blue-500 focus:ring-offset-0 border-gray-300" 
+                           />
                            <div>
                              <div className="p-2 bg-blue-100 text-blue-600 rounded-xl w-10 h-10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><BellRing className="w-5 h-5"/></div>
                              <p className="text-sm font-black text-slate-800">Gözlüğünüz Hazır Bildirimi</p>
@@ -192,7 +308,12 @@ export default function Settings() {
                          </label>
                          
                          <label className="flex items-start gap-4 p-5 bg-white/80 rounded-2xl border border-white shadow-sm cursor-pointer hover:bg-white transition-colors relative group">
-                           <input type="checkbox" defaultChecked className="mt-1 w-5 h-5 rounded text-rose-600 focus:ring-rose-500 focus:ring-offset-0 border-gray-300" />
+                           <input 
+                             type="checkbox" 
+                             checked={settings.smsBirthdayCampaign}
+                             onChange={e => updateField('smsBirthdayCampaign', e.target.checked)}
+                             className="mt-1 w-5 h-5 rounded text-rose-600 focus:ring-rose-500 focus:ring-offset-0 border-gray-300" 
+                           />
                            <div>
                              <div className="p-2 bg-rose-100 text-rose-600 rounded-xl w-10 h-10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Gift className="w-5 h-5"/></div>
                              <p className="text-sm font-black text-slate-800">Doğum Günü & Kampanya Taraması</p>
@@ -203,143 +324,24 @@ export default function Settings() {
                    </motion.div>
                  )}
 
-                 {activeTab === 'staff' && (
-                   <motion.div key="staff" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} className="space-y-8">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                             <Users className="w-6 h-6 text-purple-500"/>
-                             Personel İzleme ve Prim Sistemi
-                          </h3>
-                          <p className="text-slate-500 text-sm font-bold mt-1">Optisyen ve satış personeli listesi ile komisyon oranları.</p>
-                        </div>
-                        <button type="button" onClick={() => setIsStaffModalOpen(true)} className="px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors rounded-xl text-sm font-black flex items-center gap-2 shadow-sm">
-                          <UserPlus className="w-4 h-4"/> Personel Ekle
-                        </button>
-                      </div>
-
-                      <div className="space-y-4">
-                         
-                         <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-purple-300 transition-all group">
-                           <div className="flex items-center gap-4">
-                             <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-500 text-lg border border-slate-200 group-hover:bg-purple-500 group-hover:text-white transition-colors">FY</div>
-                             <div>
-                               <p className="font-black text-slate-800">Faruk Yıldız</p>
-                               <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">Mağaza Müdürü / Optisyen</span>
-                             </div>
-                           </div>
-                           <div className="flex items-center gap-6">
-                              <div className="text-right">
-                                <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Aylık Sistem Primi</p>
-                                <p className="font-extrabold text-slate-700">%5 (Sadece Özel Camlar)</p>
-                              </div>
-                              <button type="button" onClick={() => setIsStaffModalOpen(true)} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:text-purple-600 hover:bg-purple-50 border border-slate-200 flex items-center justify-center transition-colors"><SettingsIcon className="w-5 h-5"/></button>
-                           </div>
-                         </div>
-
-                         <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-purple-300 transition-all group">
-                           <div className="flex items-center gap-4">
-                             <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-500 text-lg border border-slate-200 group-hover:bg-purple-500 group-hover:text-white transition-colors">CA</div>
-                             <div>
-                               <p className="font-black text-slate-800">Cem Algın</p>
-                               <span className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100">Satış Elemanı</span>
-                             </div>
-                           </div>
-                           <div className="flex items-center gap-6">
-                              <div className="text-right">
-                                <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Aylık Sistem Primi</p>
-                                <p className="font-extrabold text-slate-700">Gelişim Primi Yok</p>
-                              </div>
-                              <button type="button" onClick={() => setIsStaffModalOpen(true)} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:text-purple-600 hover:bg-purple-50 border border-slate-200 flex items-center justify-center transition-colors"><SettingsIcon className="w-5 h-5"/></button>
-                           </div>
-                         </div>
-
-                      </div>
-
-                      <div className="p-5 rounded-2xl bg-indigo-50 border border-indigo-100 flex gap-4 mt-6">
-                         <div className="w-10 h-10 rounded-xl bg-indigo-200/50 text-indigo-600 flex items-center justify-center shrink-0"><Key className="w-5 h-5"/></div>
-                         <div>
-                           <h5 className="font-black text-indigo-900 text-sm">Gelişmiş Kasa İzni Güvenliği</h5>
-                           <p className="text-xs font-semibold text-indigo-700/80 mt-1 leading-relaxed">Satış elemanları rolündeki çalışanlar 'Dashboard' gibi ciro odaklı sayfaları göremezler. POS ekranına girişlerinde Z-Raporu alma tuşları sadece Mağaza Müdürü şifresi ile aktif olur.</p>
-                         </div>
-                      </div>
-
-                   </motion.div>
-                 )}
-
                </AnimatePresence>
              </div>
 
               {/* FIXED BOTTOM BAR */}
              <div className="pt-6 mt-6 border-t border-white/80 flex justify-end">
-                <button type="submit" className="px-8 py-3.5 bg-indigo-600/90 backdrop-blur-md shadow-[0_8px_20px_rgba(79,70,229,0.3)] rounded-2xl text-sm font-black text-white border border-indigo-400/30 hover:bg-indigo-700 hover:shadow-[0_12px_25px_rgba(79,70,229,0.4)] transition-all flex items-center gap-2">
-                  <Save className="w-4 h-4" /> Değişiklikleri Güvenle Kaydet
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  className="px-8 py-3.5 bg-indigo-600/90 backdrop-blur-md shadow-[0_8px_20px_rgba(79,70,229,0.3)] rounded-2xl text-sm font-black text-white border border-indigo-400/30 hover:bg-indigo-700 hover:shadow-[0_12px_25px_rgba(79,70,229,0.4)] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {isSaving ? 'Kaydediliyor...' : 'Değişiklikleri Güvenle Kaydet'}
                 </button>
              </div>
            </form>
         </div>
 
       </div>
-
-      {/* STAFF MODAL */}
-      <AnimatePresence>
-        {isStaffModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-            <motion.div 
-               initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-               animate={{ opacity: 1, scale: 1, y: 0 }} 
-               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-               className="bg-white border border-slate-200 shadow-2xl rounded-[2.5rem] p-8 w-full max-w-md relative flex flex-col overflow-hidden"
-            >
-               <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-[40px] pointer-events-none"></div>
-               
-               <button onClick={() => setIsStaffModalOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-               </button>
-
-               <div className="flex items-center gap-3 mb-8 w-full relative z-10">
-                  <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center shadow-inner"><UserPlus className="w-6 h-6"/></div>
-                  <div>
-                    <h3 className="text-xl font-black text-slate-800">Personel Düzenle</h3>
-                    <p className="text-xs font-bold text-slate-500 mt-0.5">Yetki ve sistem prim oranını yönetin.</p>
-                  </div>
-               </div>
-               
-               <div className="space-y-5 relative z-10">
-                  <InputGroup label="Ad Soyad" defaultValue="Yeni Personel" />
-                  
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Rol / Ünvan</label>
-                    <select className="w-full text-sm font-bold py-3.5 px-4 rounded-xl outline-none focus:ring-4 focus:ring-purple-500/20 border border-slate-200 bg-slate-50 text-slate-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] transition-all">
-                       <option>Satış Elemanı</option>
-                       <option>Kalfa</option>
-                       <option>Mesul Müdür (Optisyen)</option>
-                    </select>
-                  </div>
-
-                  <InputGroup label="Özel Cam Satış Primi (%)" type="number" defaultValue="2" />
-
-                  <label className="flex items-center gap-3 p-4 bg-purple-50 rounded-xl border border-purple-100 cursor-pointer hover:bg-purple-100/50 transition-colors mt-2">
-                     <input type="checkbox" defaultChecked className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500 focus:ring-offset-0 border-purple-300" />
-                     <div>
-                       <p className="text-sm font-black text-purple-900">Sadece POS ve Satışa Erişsin</p>
-                       <p className="text-[10px] font-bold text-purple-700/80 mt-1">Dashboard ve ciro ekranı gizlenir.</p>
-                     </div>
-                  </label>
-               </div>
-               
-               <div className="mt-8 pt-6 border-t border-slate-100 flex gap-3 relative z-10">
-                 <button onClick={() => setIsStaffModalOpen(false)} type="button" className="flex-1 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">İptal</button>
-                 <button onClick={() => {
-                     toast.success('Personel başarıyla kaydedildi!');
-                     setIsStaffModalOpen(false);
-                 }} type="button" className="flex-1 py-3.5 bg-purple-600 text-white font-black rounded-xl hover:bg-purple-700 shadow-[0_4px_15px_rgba(147,51,234,0.3)] transition-all">Kaydet</button>
-               </div>
-
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
     </div>
   );
@@ -363,7 +365,7 @@ function TabButton({ id, icon, title, desc, active, setActive }: any) {
   );
 }
 
-function InputGroup({ label, type = "text", defaultValue, icon }: any) {
+function InputGroup({ label, type = "text", value, onChange, icon }: { label: string; type?: string; value: string; onChange: (v: string) => void; icon?: React.ReactNode }) {
   return (
     <div>
       <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">{label}</label>
@@ -375,7 +377,8 @@ function InputGroup({ label, type = "text", defaultValue, icon }: any) {
         )}
         <input 
           type={type} 
-          defaultValue={defaultValue} 
+          value={value ?? ''} 
+          onChange={e => onChange(e.target.value)}
           className={`w-full text-sm font-bold py-3.5 ${icon ? 'pl-11 pr-4' : 'px-4'} rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/20 border border-white/60 bg-white/60 text-slate-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] transition-all focus:bg-white`} 
         />
       </div>

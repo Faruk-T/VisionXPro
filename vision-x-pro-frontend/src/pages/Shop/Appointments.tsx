@@ -6,23 +6,20 @@ import {
   Stethoscope, Check
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import api from '../../lib/api';
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newApt, setNewApt] = useState({ patient: '', phone: '', time: '09:00', type: 'Göz Muayenesi', doctor: 'Dr. Ahmet Bey' });
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([]);
+  const [newApt, setNewApt] = useState({ patient: '', phone: '', time: '09:00', type: 'Göz Muayenesi', doctor: '' });
 
   const fetchAppointments = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5069/api/appointments', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setAppointments(await res.json());
-      }
+      const data = await api.get('/appointments');
+      setAppointments(data);
     } catch(err) {
       console.error(err);
     }
@@ -30,10 +27,30 @@ export default function Appointments() {
 
   useEffect(() => {
     fetchAppointments();
+    api.get('/dashboard/employees').then((list: any[]) => {
+      setStaffList(list.map(e => ({ id: e.id, name: e.fullName ?? e.name ?? 'Personel' })));
+      if (list.length > 0) {
+        setNewApt(prev => ({ ...prev, doctor: list[0].fullName ?? list[0].name ?? '' }));
+      }
+    }).catch(() => {});
   }, []);
 
-  // Get days in a month logic simplified for demo
-  const daysInMonth = Array.from({ length: 31 }, (_, i) => i + 1);
+  const activeDateObj = new Date(selectedDate);
+  const currentYear = activeDateObj.getFullYear();
+  const currentMonth = activeDateObj.getMonth();
+  
+  const daysInMonthCount = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+  const prefixSlots = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
+
+  const daysInMonth = Array.from({ length: daysInMonthCount }, (_, i) => i + 1);
+
+  const changeMonth = (offset: number) => {
+    const newDate = new Date(currentYear, currentMonth + offset, 1);
+    const y = newDate.getFullYear();
+    const m = (newDate.getMonth() + 1).toString().padStart(2, '0');
+    setSelectedDate(`${y}-${m}-01`);
+  };
 
   const todaysAppointments = appointments.filter(a => a.date === selectedDate).sort((a,b) => a.time.localeCompare(b.time));
 
@@ -65,8 +82,22 @@ export default function Appointments() {
                     {new Date(selectedDate).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
                   </h3>
                   <div className="flex gap-2">
-                     <button onClick={() => toast('Önceki aya geçiş (Yakında)')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded-full transition-colors"><ChevronLeft className="w-5 h-5 text-slate-400"/></button>
-                     <button onClick={() => toast('Sonraki aya geçiş (Yakında)')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded-full transition-colors"><ChevronRight className="w-5 h-5 text-slate-400"/></button>
+                     <button
+                       type="button"
+                       aria-label="Önceki ay"
+                       onClick={() => changeMonth(-1)}
+                       className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700 shadow-sm transition-colors"
+                     >
+                       <ChevronLeft className="w-5 h-5"/>
+                     </button>
+                     <button
+                       type="button"
+                       aria-label="Sonraki ay"
+                       onClick={() => changeMonth(1)}
+                       className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700 shadow-sm transition-colors"
+                     >
+                       <ChevronRight className="w-5 h-5"/>
+                     </button>
                   </div>
                </div>
 
@@ -75,7 +106,7 @@ export default function Appointments() {
                </div>
                <div className="grid grid-cols-7 gap-y-3 gap-x-2 text-center text-sm font-bold text-slate-700">
                   {/* Empty slots for prefix days */}
-                  <div></div><div></div><div></div><div></div><div></div><div></div>
+                  {Array.from({ length: prefixSlots }).map((_, i) => <div key={`empty-${i}`}></div>)}
                   {/* Days */}
                   {daysInMonth.map(day => {
                     const dDate = new Date(selectedDate);
@@ -194,18 +225,28 @@ export default function Appointments() {
                                   {!isPassed && (
                                      <>
                                         <button 
-                                          onClick={() => {
-                                            setAppointments(appointments.map(a => a.id === apt.id ? {...a, status: 'completed'} : a));
-                                            toast.success('Randevu tamamlandı olarak işaretlendi.');
+                                          onClick={async () => {
+                                            try {
+                                              await api.put(`/appointments/${apt.id}/status`, { status: 'completed' });
+                                              setAppointments(appointments.map(a => a.id === apt.id ? {...a, status: 'completed'} : a));
+                                              toast.success('Randevu tamamlandı olarak işaretlendi.');
+                                            } catch (err) {
+                                              toast.error('Durum güncellenemedi.');
+                                            }
                                           }}
                                           className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center transition-colors" title="Tamamlandı İşaretle"
                                         >
                                           <Check className="w-5 h-5"/>
                                         </button>
                                         <button 
-                                          onClick={() => {
-                                            setAppointments(appointments.filter(a => a.id !== apt.id));
-                                            toast.error('Randevu iptal edildi.');
+                                          onClick={async () => {
+                                            try {
+                                              await api.delete(`/appointments/${apt.id}`);
+                                              setAppointments(appointments.filter(a => a.id !== apt.id));
+                                              toast.error('Randevu iptal edildi.');
+                                            } catch (err) {
+                                              toast.error('Randevu iptal edilemedi.');
+                                            }
                                           }}
                                           className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition-colors" title="İptal Et"
                                         >
@@ -277,6 +318,16 @@ export default function Appointments() {
                           </select>
                        </div>
                     </div>
+                    <div>
+                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Sorumlu Personel</label>
+                       <select value={newApt.doctor} onChange={e => setNewApt({...newApt, doctor: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 font-bold text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                          {staffList.length === 0 ? (
+                            <option value="">Personel bulunamadı</option>
+                          ) : staffList.map(s => (
+                            <option key={s.id} value={s.name}>{s.name}</option>
+                          ))}
+                       </select>
+                    </div>
                     
                     <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex gap-3 text-indigo-700 text-sm font-semibold">
                       <Stethoscope className="w-5 h-5 shrink-0" />
@@ -293,28 +344,20 @@ export default function Appointments() {
                           return;
                         }
                         try {
-                           const token = localStorage.getItem('token');
-                           const res = await fetch('http://localhost:5069/api/appointments', {
-                             method: 'POST',
-                             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                             body: JSON.stringify({
-                               patient: newApt.patient,
-                               phone: newApt.phone,
-                               date: selectedDate,
-                               time: newApt.time,
-                               type: newApt.type
-                             })
+                           await api.post('/appointments', {
+                             patient: newApt.patient,
+                             phone: newApt.phone,
+                             date: selectedDate,
+                             time: newApt.time,
+                             type: newApt.type,
+                             doctor: newApt.doctor
                            });
-                           if (res.ok) {
-                             toast.success('Randevu başarıyla takvime eklendi!');
-                             setIsAddModalOpen(false);
-                             setNewApt({ patient: '', phone: '', time: '09:00', type: 'Göz Muayenesi', doctor: 'Dr. Ahmet Bey' });
-                             fetchAppointments();
-                           } else {
-                             toast.error('Kayıt başarısız.');
-                           }
-                        } catch(err) {
-                           toast.error('Bağlantı hatası.');
+                           toast.success('Randevu başarıyla takvime eklendi!');
+                           setIsAddModalOpen(false);
+                           setNewApt({ patient: '', phone: '', time: '09:00', type: 'Göz Muayenesi', doctor: staffList[0]?.name ?? '' });
+                           fetchAppointments();
+                        } catch(err: any) {
+                           toast.error(err.message || 'Kayıt başarısız.');
                         }
                       }}
                       className="px-8 py-3.5 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center gap-2 transition-all"

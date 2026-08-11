@@ -22,6 +22,8 @@ namespace VisionXPro.Persistence
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<ShopSettings> ShopSettings { get; set; }
+        public DbSet<RegulatoryNotification> RegulatoryNotifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

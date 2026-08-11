@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { motion } from 'framer-motion';
-import { Printer, Tag, QrCode, Search, ScanBarcode, Box, Settings2, Info } from 'lucide-react';
+import { Printer, Tag, QrCode, Search, ScanBarcode, Box, Settings2, Info, CheckSquare, Square } from 'lucide-react';
 import Barcode from 'react-barcode';
+import api from '../../lib/api';
 
 export default function Labels() {
   const [tab, setTab] = useState<'tek' | 'toplu'>('tek');
@@ -17,7 +19,76 @@ export default function Labels() {
   const [extraInfo, setExtraInfo] = useState('Güneş Gözlüğü - 2 Yıl Garanti');
   const [showPrice, setShowPrice] = useState(true);
   
+  const [origin, setOrigin] = useState('Türkiye');
+  const [priceDate, setPriceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [barcodeType, setBarcodeType] = useState('CODE128');
+  const [isA4Mode, setIsA4Mode] = useState(false);
+
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<string>('');
+  const [bulkSelected, setBulkSelected] = useState<string[]>([]);
+  const [bulkSearch, setBulkSearch] = useState('');
+  
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  type LabelData = {
+    productName: string;
+    barcodeNum: string;
+    price: string;
+    origin: string;
+    priceDate: string;
+  };
+
+  const productToLabel = (prod: any): LabelData => ({
+    productName: prod.name ?? '',
+    barcodeNum: prod.barcode ?? '',
+    price: (prod.salePrice ?? 0).toString(),
+    origin: prod.origin || 'Türkiye',
+    priceDate: prod.priceUpdateDate || new Date().toISOString().split('T')[0],
+  });
+
+  const singleLabel: LabelData = { productName, barcodeNum, price, origin, priceDate };
+
+  const printLabels: LabelData[] = tab === 'toplu'
+    ? bulkSelected
+        .map(id => products.find(p => String(p.productId ?? p.id) === id))
+        .filter(Boolean)
+        .map(productToLabel)
+    : Array.from({ length: quantity }, () => singleLabel);
+
+  const toggleBulk = (id: string) => {
+    setBulkSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : prev.length >= 72 ? prev : [...prev, id]
+    );
+  };
+
+  const filteredBulkProducts = products.filter(p => {
+    const q = bulkSearch.toLowerCase();
+    return !q || p.name?.toLowerCase().includes(q) || p.barcode?.toLowerCase().includes(q);
+  });
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const data = await api.get('/products');
+        setProducts(data);
+      } catch (err) {}
+    };
+    fetchProducts();
+  }, []);
+
+  const handleProductSelect = (id: string) => {
+    setSelectedProduct(id);
+    const prod = products.find(p => p.productId === id || p.id === parseInt(id));
+    if (prod) {
+      setProductName(prod.name);
+      setBarcodeNum(prod.barcode);
+      setPrice(prod.salePrice?.toString() || '0');
+      setOrigin(prod.origin || 'Türkiye');
+      setPriceDate(prod.priceUpdateDate || new Date().toISOString().split('T')[0]);
+      setExtraInfo(prod.category ? `${prod.category}${prod.brand ? ` - ${prod.brand}` : ''}` : extraInfo);
+    }
+  };
 
   const handlePrint = () => {
     window.print();
@@ -31,37 +102,57 @@ export default function Labels() {
         <div id="printable-section" className="hidden print:flex flex-col">
           <style dangerouslySetInnerHTML={{__html: `
             @media print {
-               @page { size: ${labelWidth}mm ${labelHeight}mm; margin: 0; padding: 0; }
+               @page { size: ${isA4Mode ? 'A4' : `${labelWidth}mm ${labelHeight}mm`}; margin: 0; padding: 0; }
                body, html { 
                  margin: 0; 
                  padding: 0; 
                  background: white;
                }
                #root {
-                 display: none !important; /* Uygulamanın tamamını gizler, ghost boşluk bırakmaz */
+                 display: none !important;
                }
                #printable-section {
-                 display: flex !important;
-                 flex-direction: column;
-                 width: ${labelWidth}mm;
+                 display: ${isA4Mode ? 'grid' : 'flex'} !important;
+                 flex-direction: ${isA4Mode ? 'row' : 'column'};
+                 grid-template-columns: ${isA4Mode ? 'repeat(4, 1fr)' : 'none'};
+                 grid-template-rows: ${isA4Mode ? 'repeat(18, 1fr)' : 'none'};
+                 width: ${isA4Mode ? '210mm' : `${labelWidth}mm`};
+                 height: ${isA4Mode ? '297mm' : 'auto'};
                  background: white;
+                 gap: ${isA4Mode ? '0' : '0'};
+                 padding: ${isA4Mode ? '5mm' : '0'};
                }
             }
           `}} />
           
-          {Array.from({ length: quantity }).map((_, i) => (
-            <div key={i} className="flex flex-col items-center justify-center bg-white" style={{ width: `${labelWidth}mm`, height: `${labelHeight}mm`, boxSizing: 'border-box', padding: '2mm', pageBreakAfter: i === quantity - 1 ? 'auto' : 'always' }}>
-               <p style={{ fontSize: '10px', fontWeight: '900', color: 'black', textAlign: 'center', lineHeight: '1.2', marginBottom: '2px', fontFamily: 'sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{productName}</p>
-               <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center', marginBottom: '-5px', width: '100%', display: 'flex', justifyContent: 'center' }}>
-                 <Barcode value={barcodeNum || '000000'} format="CODE128" width={2} height={40} displayValue={false} margin={0} background="transparent" lineColor="#000" />
+          {(() => {
+            const slots = isA4Mode
+              ? (tab === 'toplu' ? Math.min(printLabels.length, 72) : 72)
+              : printLabels.length;
+            return Array.from({ length: slots }).map((_, i) => {
+            const lbl = isA4Mode && tab === 'tek' ? singleLabel : (printLabels[i] ?? singleLabel);
+            return (
+            <div key={i} className="flex flex-col items-center justify-center bg-white border-dashed border-slate-200 border" style={{ width: isA4Mode ? 'auto' : `${labelWidth}mm`, height: isA4Mode ? 'auto' : `${labelHeight}mm`, boxSizing: 'border-box', padding: '1mm', pageBreakAfter: (isA4Mode || i === slots - 1) ? 'auto' : 'always' }}>
+               <p style={{ fontSize: '9px', fontWeight: '900', color: 'black', textAlign: 'center', lineHeight: '1.1', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{lbl.productName}</p>
+               <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center', marginBottom: '-2px', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                 {barcodeType === 'CODE128' ? (
+                    <Barcode value={lbl.barcodeNum || '000000'} format="CODE128" width={1.5} height={30} displayValue={false} margin={0} background="transparent" lineColor="#000" />
+                 ) : (
+                    <QRCodeSVG value={lbl.barcodeNum || '000000'} size={30} />
+                 )}
                </div>
-               <p style={{ fontSize: '10px', fontWeight: 'bold', color: 'black', fontFamily: 'monospace', letterSpacing: '1px' }}>{barcodeNum}</p>
-               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'flex-end', marginTop: 'auto' }}>
-                  <p style={{ fontSize: '8px', color: '#000', fontWeight: 'bold' }}>{extraInfo}</p>
-                  {showPrice && <p style={{ fontSize: '12px', fontWeight: '900', color: 'black' }}>{parseFloat(price).toLocaleString('tr-TR')} ₺</p>}
+               <p style={{ fontSize: '8px', fontWeight: 'bold', color: 'black', fontFamily: 'monospace', letterSpacing: '0.5px' }}>{lbl.barcodeNum}</p>
+               
+               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginTop: 'auto', borderTop: '1px solid #ddd', paddingTop: '2px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                     <p style={{ fontSize: '6px', color: '#000', fontWeight: 'bold' }}>Menşei: {lbl.origin}</p>
+                     <p style={{ fontSize: '6px', color: '#000', fontWeight: 'bold' }}>Tarih: {lbl.priceDate}</p>
+                  </div>
+                  {showPrice && <p style={{ fontSize: '11px', fontWeight: '900', color: 'black' }}>{parseFloat(lbl.price).toLocaleString('tr-TR')} ₺</p>}
                </div>
             </div>
-          ))}
+          );});
+          })()}
         </div>,
         document.body
       )}
@@ -96,6 +187,43 @@ export default function Labels() {
            <div className="flex-[3] bg-white/60 backdrop-blur-3xl border border-white/80 shadow-[0_8px_32px_rgba(0,0,0,0.05)] rounded-[2rem] p-8 flex flex-col h-fit relative">
                <div className="absolute top-0 left-0 w-32 h-32 bg-indigo-100/50 rounded-full blur-[80px] pointer-events-none"></div>
                
+               {tab === 'toplu' ? (
+                 <>
+                   <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
+                     <Box className="w-6 h-6 text-indigo-500"/> Toplu Etiket Seçimi
+                   </h3>
+                   <p className="text-sm font-bold text-slate-500 mb-4">Stoktan birden fazla ürün seçin (A4 sayfada en fazla 72 etiket).</p>
+                   <div className="relative mb-4">
+                     <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"/>
+                     <input type="text" value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} placeholder="Barkod veya ürün adı ara..." className="w-full bg-white/80 border border-slate-200 py-3 pl-11 pr-4 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-400"/>
+                   </div>
+                   <div className="flex gap-2 mb-4">
+                     <button type="button" onClick={() => setBulkSelected(filteredBulkProducts.slice(0, 72).map(p => String(p.productId ?? p.id)))} className="px-4 py-2 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200">Tümünü Seç</button>
+                     <button type="button" onClick={() => setBulkSelected([])} className="px-4 py-2 bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200">Temizle</button>
+                     <span className="ml-auto text-xs font-bold text-slate-500 self-center">{bulkSelected.length} / 72 seçili</span>
+                   </div>
+                   <div className="max-h-[420px] overflow-y-auto space-y-2 relative z-10">
+                     {filteredBulkProducts.map(p => {
+                       const id = String(p.productId ?? p.id);
+                       const checked = bulkSelected.includes(id);
+                       return (
+                         <label key={id} className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${checked ? 'bg-indigo-50 border-indigo-300' : 'bg-white/80 border-slate-200 hover:border-indigo-200'}`}>
+                           <input type="checkbox" checked={checked} onChange={() => toggleBulk(id)} className="sr-only"/>
+                           {checked ? <CheckSquare className="w-5 h-5 text-indigo-600 shrink-0"/> : <Square className="w-5 h-5 text-slate-300 shrink-0"/>}
+                           <div className="min-w-0 flex-1">
+                             <p className="font-bold text-slate-800 truncate">{p.name}</p>
+                             <p className="text-xs font-mono text-slate-500">{p.barcode} · {parseFloat(p.salePrice ?? 0).toLocaleString('tr-TR')} ₺</p>
+                           </div>
+                         </label>
+                       );
+                     })}
+                     {filteredBulkProducts.length === 0 && (
+                       <p className="text-center text-slate-500 font-bold py-8">Stokta ürün bulunamadı.</p>
+                     )}
+                   </div>
+                 </>
+               ) : (
+               <>
                <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 mb-6">
                  <ScanBarcode className="w-6 h-6 text-indigo-500"/> Etiket Bilgileri
                </h3>
@@ -103,8 +231,13 @@ export default function Labels() {
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                  
                  <div className="col-span-1 md:col-span-2">
-                   <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block flex items-center gap-1"><Search className="w-3 h-3"/> Ürün Ara / Adı</label>
-                   <input type="text" value={productName} onChange={e=>setProductName(e.target.value)} className="w-full bg-white/80 border border-slate-200 py-4 px-5 rounded-2xl text-lg font-bold text-slate-800 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all shadow-sm" placeholder="Aramak için yazın..." />
+                   <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block flex items-center gap-1"><Search className="w-3 h-3"/> Ürün Seç</label>
+                   <select value={selectedProduct} onChange={e => handleProductSelect(e.target.value)} className="w-full bg-white/80 border border-slate-200 py-4 px-5 rounded-2xl text-lg font-bold text-slate-800 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all shadow-sm">
+                     <option value="" disabled>Stoktan ürün seçiniz...</option>
+                     {products.map(p => (
+                       <option key={p.productId} value={p.productId}>{p.barcode} - {p.name}</option>
+                     ))}
+                   </select>
                  </div>
 
                  <div>
@@ -114,9 +247,9 @@ export default function Labels() {
 
                  <div>
                    <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block flex items-center gap-1"><QrCode className="w-3 h-3"/> Barkod Tipi</label>
-                   <select className="w-full bg-white/80 border border-slate-200 py-4 px-5 rounded-2xl text-md font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all shadow-sm appearance-none cursor-pointer">
-                     <option>Görsel Barkod (Code128)</option>
-                     <option>Karekod (QR Code)</option>
+                   <select value={barcodeType} onChange={e=>setBarcodeType(e.target.value)} className="w-full bg-white/80 border border-slate-200 py-4 px-5 rounded-2xl text-md font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all shadow-sm appearance-none cursor-pointer">
+                     <option value="CODE128">Görsel Barkod (Code128)</option>
+                     <option value="QR">Karekod (QR Code)</option>
                    </select>
                  </div>
 
@@ -129,8 +262,21 @@ export default function Labels() {
                    <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block flex items-center gap-1"><Info className="w-3 h-3"/> Ek Bilgi Notu</label>
                    <input type="text" value={extraInfo} onChange={e=>setExtraInfo(e.target.value)} className="w-full bg-white/80 border border-slate-200 py-4 px-5 rounded-2xl text-md font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all shadow-sm" placeholder="Örn: Renk: Siyah" />
                  </div>
+                 
+                 <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-6 mt-2 pt-6 border-t border-slate-200/50">
+                    <div>
+                      <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Menşei (Ülke)</label>
+                      <input type="text" value={origin} onChange={e=>setOrigin(e.target.value)} className="w-full bg-white/80 border border-slate-200 py-3 px-4 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-400" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Fiyat Değişim Tarihi</label>
+                      <input type="date" value={priceDate} onChange={e=>setPriceDate(e.target.value)} className="w-full bg-white/80 border border-slate-200 py-3 px-4 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-400" />
+                    </div>
+                 </div>
 
                </div>
+               </>
+               )}
                
            </div>
 
@@ -145,10 +291,22 @@ export default function Labels() {
                  <div className="space-y-6">
                     <div>
                       <label className="text-[10px] font-black tracking-widest text-slate-500 uppercase mb-2 block">Etiket Boyutu</label>
-                      <select className="w-full bg-white/80 border border-slate-200 py-3.5 px-4 rounded-xl text-sm font-bold text-slate-700 outline-none mb-3 shadow-sm">
-                        <option>Diğer (Özel Boyut)</option>
-                        <option>40mm x 20mm (Standart Optik)</option>
-                        <option>60mm x 40mm (Kargo)</option>
+                      <select value={isA4Mode ? 'a4' : `${labelWidth}x${labelHeight}`} onChange={e => {
+                        if (e.target.value === 'a4') {
+                          setIsA4Mode(true);
+                        } else if (e.target.value === 'custom') {
+                          setIsA4Mode(false);
+                        } else {
+                          setIsA4Mode(false);
+                          const [w, h] = e.target.value.split('x');
+                          setLabelWidth(Number(w));
+                          setLabelHeight(Number(h));
+                        }
+                      }} className="w-full bg-white/80 border border-slate-200 py-3.5 px-4 rounded-xl text-sm font-bold text-slate-700 outline-none mb-3 shadow-sm">
+                        <option value="custom">Diğer (Özel Boyut)</option>
+                        <option value="40x20">40mm x 20mm (Standart Optik)</option>
+                        <option value="60x40">60mm x 40mm (Kargo)</option>
+                        <option value="a4">A4 Yapışkanlı Sayfa (72 Etiket)</option>
                       </select>
                       
                       <div className="grid grid-cols-2 gap-3 p-4 bg-purple-50/50 rounded-xl border border-purple-100">
@@ -184,15 +342,25 @@ export default function Labels() {
         {/* BOTTOM ACTION BAR */}
         <div className="bg-white/90 backdrop-blur-3xl border border-white shadow-[0_-15px_40px_rgba(0,0,0,0.06)] rounded-t-[2.5rem] md:rounded-[2.5rem] p-6 flex flex-col md:flex-row justify-between items-center fixed bottom-0 md:bottom-6 left-0 md:left-6 lg:left-80 right-0 md:right-6 lg:right-8 z-40 gap-4 md:gap-0">
            <p className="text-sm font-bold text-slate-500 w-full md:w-auto text-center md:text-left">
-              Şu an <span className="text-indigo-600 font-black bg-indigo-50 px-2 py-0.5 rounded-md">{quantity} Adet</span> termal etiket çıkartılmaya hazır.
+              {tab === 'toplu' ? (
+                <>Toplu mod: <span className="text-indigo-600 font-black bg-indigo-50 px-2 py-0.5 rounded-md">{bulkSelected.length} ürün</span> etiketlenmeye hazır.</>
+              ) : (
+                <>Şu an <span className="text-indigo-600 font-black bg-indigo-50 px-2 py-0.5 rounded-md">{quantity} Adet</span> termal etiket çıkartılmaya hazır.</>
+              )}
            </p>
            
            <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-             <button onClick={() => setIsPreviewOpen(true)} className="px-8 py-3.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-extrabold rounded-2xl hover:bg-indigo-100 shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap">
+             <button onClick={() => {
+               if (tab === 'toplu' && bulkSelected.length === 0) { alert('Lütfen en az bir ürün seçin.'); return; }
+               setIsPreviewOpen(true);
+             }} className="px-8 py-3.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-extrabold rounded-2xl hover:bg-indigo-100 shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap">
                 <Search className="w-5 h-5"/>
                 TASARIMI GÖR (ÖNİZLEME)
              </button>
-             <button onClick={handlePrint} className="px-10 py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 shadow-[0_8px_20px_rgba(99,102,241,0.4)] text-white font-black rounded-2xl flex items-center gap-3 hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(99,102,241,0.6)] transition-all whitespace-nowrap">
+             <button onClick={() => {
+               if (tab === 'toplu' && bulkSelected.length === 0) { alert('Lütfen en az bir ürün seçin.'); return; }
+               handlePrint();
+             }} className="px-10 py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 shadow-[0_8px_20px_rgba(99,102,241,0.4)] text-white font-black rounded-2xl flex items-center gap-3 hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(99,102,241,0.6)] transition-all whitespace-nowrap">
                 <Printer className="w-6 h-6"/>
                 YAZDIR (Print)
              </button>

@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using VisionXPro.Application.Authorization;
 using VisionXPro.Application.Interfaces;
 using VisionXPro.Domain.Entities;
 
@@ -20,16 +23,21 @@ namespace VisionXPro.Infrastructure.Authentication
 
         public string GenerateToken(User user)
         {
-            var claims = new[]
+            var permissions = StaffPermissions.Resolve(user.Role, user.JobTitle);
+            var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
                 new Claim("OrganizationId", user.OrganizationId.ToString()),
                 new Claim("BranchId", user.BranchId.ToString()),
-                new Claim(ClaimTypes.Role, user.Role)
+                new Claim(ClaimTypes.Role, user.Role),
+                new Claim("permissions", StaffPermissions.ToClaimValue(permissions))
             };
 
-            var secret = _configuration["Jwt:Secret"] ?? "VisionXProSuperSecretKey1234567890";
+            if (!string.IsNullOrWhiteSpace(user.JobTitle))
+                claims.Add(new Claim("jobTitle", user.JobTitle.Trim()));
+
+            var secret = _configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret is not configured.");
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

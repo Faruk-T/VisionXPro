@@ -6,11 +6,14 @@ import {
   AlertTriangle, Bell, Clock, CalendarDays, ShoppingBag 
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
 
 const COLORS = ['#10B981', '#3B82F6', '#8B5CF6'];
 
 export default function Dashboard() {
   const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
   const [greeting, setGreeting] = useState('');
   
   const [financeData, setFinanceData] = useState<any>(null);
@@ -26,27 +29,18 @@ export default function Dashboard() {
     // Fetch Real Data
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const headers = { 'Authorization': `Bearer ${token}` };
+        const fData = await api.get('/Orders/finance');
+        setFinanceData(fData);
 
-        const financeRes = await fetch('http://localhost:5069/api/Orders/finance', { headers });
-        if (financeRes.ok) {
-           const fData = await financeRes.json();
-           setFinanceData(fData);
-        }
-
-        const productRes = await fetch('http://localhost:5069/api/Products', { headers });
-        if (productRes.ok) {
-           const pData = await productRes.json();
-           if (Array.isArray(pData)) {
-              const lowStock = pData.filter((p: any) => p.quantity <= 3);
-              const generatedAlerts = lowStock.map((p: any, idx: number) => ({
-                 id: idx,
-                 type: 'warning',
-                 msg: `${p.name} stok uyarısı: Sadece ${p.quantity} adet kaldı!`
-              }));
-              setAlerts(generatedAlerts);
-           }
+        const pData = await api.get('/Products');
+        if (Array.isArray(pData)) {
+           const lowStock = pData.filter((p: any) => p.quantity <= 3);
+           const generatedAlerts = lowStock.map((p: any, idx: number) => ({
+              id: idx,
+              type: 'warning',
+              msg: `${p.name} stok uyarısı: Sadece ${p.quantity} adet kaldı!`
+           }));
+           setAlerts(generatedAlerts);
         }
       } catch (err) {
         console.error("Dashboard veri çekme hatası:", err);
@@ -90,18 +84,29 @@ export default function Dashboard() {
             <p className="text-slate-500 mt-2 font-bold text-sm">İşleriniz bugün harika görünüyor. İşte güncel mağaza özetiniz.</p>
           </div>
           
-          <div className="flex gap-4 mt-6 md:mt-0">
-             <button className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white/80 backdrop-blur-md border border-white shadow-sm rounded-2xl text-sm font-bold text-slate-700 hover:bg-white transition-all">
-               <CalendarDays className="w-4 h-4" /> Bugün
+          <div className="flex gap-4 mt-6 md:mt-0 relative z-20">
+             <button
+               type="button"
+               onClick={() => navigate('/dashboard/appointments')}
+               className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white/80 backdrop-blur-md border border-white shadow-sm rounded-2xl text-sm font-bold text-slate-700 hover:bg-white transition-all cursor-pointer"
+             >
+               <CalendarDays className="w-4 h-4" /> Randevular
              </button>
-             <button className="flex items-center justify-center gap-2 px-8 py-3.5 bg-indigo-600/90 backdrop-blur-md shadow-[0_8px_20px_rgba(79,70,229,0.3)] rounded-2xl text-sm font-black text-white border border-indigo-400/30 hover:bg-indigo-700 hover:shadow-[0_12px_25px_rgba(79,70,229,0.4)] transition-all">
+             <button
+               type="button"
+               onClick={() => {
+                 navigate('/dashboard/pos');
+                 window.scrollTo(0, 0);
+               }}
+               className="flex items-center justify-center gap-2 px-8 py-3.5 bg-indigo-600/90 backdrop-blur-md shadow-[0_8px_20px_rgba(79,70,229,0.3)] rounded-2xl text-sm font-black text-white border border-indigo-400/30 hover:bg-indigo-700 hover:shadow-[0_12px_25px_rgba(79,70,229,0.4)] transition-all active:scale-[0.98] cursor-pointer"
+             >
                <ShoppingBag className="w-4 h-4" /> Yeni Satış Yap
              </button>
           </div>
         </div>
 
         {/* METRICS ROW */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
            <MetricCard 
               icon={<Wallet className="text-blue-500 w-6 h-6"/>}
               title="Bugünkü Kasa / Ciro"
@@ -126,6 +131,12 @@ export default function Dashboard() {
               value={`₺${(financeData?.cardVault || 0).toLocaleString('tr-TR')}`}
               trend="POS" trendUp={true}
            />
+           <MetricCard 
+              icon={<Wallet className="text-rose-500 w-6 h-6"/>}
+              title="Bekleyen SGK Alacağı"
+              value={`₺${(financeData?.sgkVault || 0).toLocaleString('tr-TR')}`}
+              trend="Kurum" trendUp={true}
+           />
         </div>
 
         {/* CHARTS ROW */}
@@ -138,7 +149,7 @@ export default function Dashboard() {
               Haftalık Cirolar Analizi (Nakit vs SGK)
             </h3>
             <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={financeData?.weeklyRevenue || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
@@ -164,7 +175,7 @@ export default function Dashboard() {
                  Tahsilat Dağılımı
               </h3>
               <div className="h-[200px] w-full mt-2 relative">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={200}>
                   <PieChart>
                     <Pie
                       data={finalPieData}
@@ -173,7 +184,7 @@ export default function Dashboard() {
                       paddingAngle={5}
                       dataKey="value" stroke="none"
                     >
-                      {finalPieData.map((entry, index) => (
+                      {finalPieData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>

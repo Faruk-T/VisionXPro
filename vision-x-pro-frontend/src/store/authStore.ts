@@ -7,6 +7,8 @@ interface User {
   role: string;
   organizationId: string;
   branchId?: string;
+  jobTitle?: string;
+  permissions?: string[];
 }
 
 interface AuthState {
@@ -32,3 +34,5 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token: null, user: null, isAuthenticated: false });
   },
 }));
+
+export type { User };

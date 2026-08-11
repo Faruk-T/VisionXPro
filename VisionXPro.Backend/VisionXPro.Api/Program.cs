@@ -20,7 +20,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<ITenantService, TenantService>();
 builder.Services.AddSingleton<IJwtProvider, JwtProvider>();
 
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "VisionXProSuperSecretKey1234567890";
+var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret must be configured in appsettings.json");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -38,12 +38,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+var allowedOrigins = builder.Configuration["Cors:AllowedOrigins"]?.Split(',') ?? new[] { "http://localhost:5173" };
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
         policy =>
         {
-            policy.AllowAnyOrigin()
+            policy.WithOrigins(allowedOrigins)
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         });
@@ -56,7 +57,7 @@ using (var scope = app.Services.CreateScope())
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     context.Database.Migrate();
 
-    var rolesToSeed = new[] { "SuperAdmin", "ShopOwner", "Customer" };
+    var rolesToSeed = new[] { "SuperAdmin", "ShopOwner", "CorporateOwner", "ShopStaff", "Customer" };
     foreach (var roleName in rolesToSeed)
     {
         if (!context.Roles.Any(r => r.Name == roleName))
@@ -81,7 +82,7 @@ using (var scope = app.Services.CreateScope())
             IsActive = true
         };
         var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<VisionXPro.Domain.Entities.User>();
-        superAdmin.PasswordHash = hasher.HashPassword(superAdmin, "Admin123!");
+        superAdmin.PasswordHash = hasher.HashPassword(superAdmin, builder.Configuration["AdminSeed:Password"] ?? "Admin123!");
 
         context.Organizations.Add(sysOrg);
         context.Branches.Add(sysBranch);

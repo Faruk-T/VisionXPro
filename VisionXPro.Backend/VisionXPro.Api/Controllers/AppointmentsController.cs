@@ -7,12 +7,14 @@ using System.Threading.Tasks;
 using VisionXPro.Domain.Entities;
 using VisionXPro.Persistence;
 using VisionXPro.Application.Interfaces;
+using VisionXPro.Api.Authorization;
+using VisionXPro.Application.Authorization;
 
 namespace VisionXPro.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "ShopOwner")]
+    [Authorize(Roles = "ShopOwner,ShopStaff")]
     public class AppointmentsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -25,6 +27,7 @@ namespace VisionXPro.Api.Controllers
         }
 
         [HttpGet]
+        [RequirePermission(StaffPermissions.Appointments)]
         public async Task<IActionResult> GetAppointments()
         {
             var orgId = _tenantService.GetOrganizationId();
@@ -44,9 +47,9 @@ namespace VisionXPro.Api.Controllers
                             time = apt.AppointmentDate.ToString("HH:mm"),
                             patient = cus.FirstName + " " + cus.LastName,
                             phone = cus.Phone,
-                            type = "Genel Kontrol",
+                            type = apt.AppointmentType ?? "Genel Kontrol",
                             status = apt.Status,
-                            doctor = "Dr. Ahmet Bey"
+                            doctor = apt.AssignedStaffName ?? "Atanmadı"
                         };
 
             var list = await query.ToListAsync();
@@ -55,6 +58,7 @@ namespace VisionXPro.Api.Controllers
         }
 
         [HttpPost]
+        [RequirePermission(StaffPermissions.Appointments)]
         public async Task<IActionResult> CreateAppointment([FromBody] CreateAppointmentDto dto)
         {
             var orgId = _tenantService.GetOrganizationId();
@@ -94,6 +98,8 @@ namespace VisionXPro.Api.Controllers
                 CustomerId = customer.Id,
                 AppointmentDate = apptDate,
                 Status = "upcoming",
+                AppointmentType = dto.Type,
+                AssignedStaffName = dto.Doctor,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -101,6 +107,50 @@ namespace VisionXPro.Api.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Appointment created successfully." });
+        }
+
+        [HttpPut("{appointmentId}/status")]
+        [RequirePermission(StaffPermissions.Appointments)]
+        public async Task<IActionResult> UpdateAppointmentStatus(Guid appointmentId, [FromBody] UpdateAppointmentStatusDto dto)
+        {
+            var orgId = _tenantService.GetOrganizationId();
+            var branchId = _tenantService.GetBranchId();
+
+            if (branchId == null)
+                return BadRequest(new { message = "Branch ID is required" });
+
+            var appointment = await _context.Appointments
+                .FirstOrDefaultAsync(a => a.Id == appointmentId && a.OrganizationId == orgId && a.BranchId == branchId.Value);
+
+            if (appointment == null)
+                return NotFound(new { message = "Randevu bulunamadı." });
+
+            appointment.Status = dto.Status;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Randevu durumu güncellendi.", status = appointment.Status });
+        }
+
+        [HttpDelete("{appointmentId}")]
+        [RequirePermission(StaffPermissions.Appointments)]
+        public async Task<IActionResult> DeleteAppointment(Guid appointmentId)
+        {
+            var orgId = _tenantService.GetOrganizationId();
+            var branchId = _tenantService.GetBranchId();
+
+            if (branchId == null)
+                return BadRequest(new { message = "Branch ID is required" });
+
+            var appointment = await _context.Appointments
+                .FirstOrDefaultAsync(a => a.Id == appointmentId && a.OrganizationId == orgId && a.BranchId == branchId.Value);
+
+            if (appointment == null)
+                return NotFound(new { message = "Randevu bulunamadı." });
+
+            appointment.IsDeleted = true;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Randevu başarıyla iptal edildi." });
         }
     }
 
@@ -111,5 +161,11 @@ namespace VisionXPro.Api.Controllers
         public string Date { get; set; } = string.Empty;
         public string Time { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
+        public string? Doctor { get; set; }
+    }
+
+    public class UpdateAppointmentStatusDto
+    {
+        public string Status { get; set; } = string.Empty;
     }
 }
