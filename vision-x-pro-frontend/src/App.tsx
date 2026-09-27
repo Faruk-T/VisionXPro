@@ -34,6 +34,10 @@ import CorporateStores from './pages/Corporate/CorporateStores';
 import CorporateTransfers from './pages/Corporate/CorporateTransfers';
 import CorporateSettings from './pages/Corporate/CorporateSettings';
 
+// Customer Components
+import MyPrescriptions from './pages/Customer/MyPrescriptions';
+import MyAppointments from './pages/Customer/MyAppointments';
+
 // Admin components are now imported from pages/Admin
 
 function MainLayout() {
@@ -152,8 +156,8 @@ function App() {
 
             {/* Customer Only */}
             <Route element={<ProtectedRoutes allowedRoles={['Customer']} />}>
-              <Route path="my-prescriptions" element={<div>Reçetelerim Yapım Aşamasında</div>} />
-              <Route path="my-appointments" element={<div>Randevularım Yapım Aşamasında</div>} />
+              <Route path="my-prescriptions" element={<MyPrescriptions />} />
+              <Route path="my-appointments" element={<MyAppointments />} />
             </Route>
           </Route>
         </Route>

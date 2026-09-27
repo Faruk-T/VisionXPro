@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Building2, Globe, HeartPulse, Receipt, Save, 
-  ShieldCheck, Smartphone, Settings as SettingsIcon, Link2,
+  Smartphone, Settings as SettingsIcon, Link2,
   MessageSquare, BellRing, Gift, Loader2, AlertTriangle,
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';

@@ -1,0 +1,36 @@
+## --- .NET & Visual Studio ---
+bin/
+obj/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+.vs/
+TestResults/
+*.build_output*.txt
+build_output*.txt
+build_err*.txt
+build_errors.txt
+_build_check/
+scratch.csx
+
+## --- Node & Frontend ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env.local
+.env.production.local
+.eslintcache
+
+## --- OS & IDEs ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## --- Database & Logs ---
+*.log
+*.mdf
+*.ldf
