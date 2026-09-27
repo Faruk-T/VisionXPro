@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Trash2, Box, QrCode, User, 
-  CreditCard, Banknote, Loader2, X, RefreshCcw, FileText, Zap
+  CreditCard, Banknote, Loader2, X, RefreshCcw, FileText, Zap,
+  HeartPulse, Award, Share2, Keyboard
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import api from '../../lib/api';
 import ComplianceAlertModal, { type ComplianceAlert } from '../../components/ComplianceAlertModal';
+import MedulaQueryModal from '../../components/MedulaQueryModal';
+import DigitalWarrantyModal from '../../components/DigitalWarrantyModal';
 
 export default function PointOfSale() {
   const [cart, setCart] = useState<any[]>([]);
@@ -49,6 +52,34 @@ export default function PointOfSale() {
   const [scanMode, setScanMode] = useState(true);
   const [serialQty, setSerialQty] = useState(1);
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const [showMedulaModal, setShowMedulaModal] = useState(false);
+  const [showWarrantyModal, setShowWarrantyModal] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        barcodeRef.current?.focus();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        setShowMedulaModal(true);
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        fetchCustomersList();
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        fetchInventoryItems();
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        handleCheckout('Nakit');
+      } else if (e.key === 'F10') {
+        e.preventDefault();
+        handleCheckout('Kredi Kartı');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
 
   useEffect(() => {
     const fetchEmployees = async () => {
@@ -299,11 +330,38 @@ export default function PointOfSale() {
           </div>
           
           <div className="flex gap-4">
+             <motion.button 
+               onClick={() => setShowMedulaModal(true)} 
+               whileHover={{ scale: 1.05 }} 
+               whileTap={btnTap} 
+               className="flex items-center gap-2 px-6 py-3 bg-red-50 border border-red-200 text-red-700 shadow-sm rounded-2xl text-sm font-bold hover:bg-red-100 transition-all"
+             >
+               <HeartPulse className="w-4 h-4 text-red-600" /> SGK Medula (F3)
+             </motion.button>
              <motion.button onClick={fetchZReport} whileHover={{ scale: 1.05 }} whileTap={btnTap} className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-slate-200 text-purple-700 shadow-[0_0_20px_rgba(168,85,247,0.2)] rounded-2xl text-sm font-bold hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:bg-slate-100 transition-all">
                <FileText className="w-4 h-4" /> Z Raporu
              </motion.button>
           </div>
         </motion.div>
+
+        {/* KEYBOARD SHORTCUTS BANNER */}
+        <div className="hidden lg:flex items-center justify-between px-6 py-2.5 bg-slate-900 text-slate-300 rounded-2xl text-xs font-semibold shadow-sm border border-slate-800">
+          <div className="flex items-center gap-2 text-white font-bold">
+            <Keyboard className="w-4 h-4 text-blue-400" />
+            <span>Kasa Kısayolları:</span>
+          </div>
+          <div className="flex items-center gap-5 text-slate-300 text-[11px]">
+            <span><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-white font-mono border border-slate-700">F2</kbd> Barkod Odak</span>
+            <span><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-white font-mono border border-slate-700">F3</kbd> SGK Medula</span>
+            <span><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-white font-mono border border-slate-700">F4</kbd> Müşteri</span>
+            <span><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-white font-mono border border-slate-700">F8</kbd> Katalog</span>
+            <span><kbd className="bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded font-mono border border-emerald-800">F9</kbd> Nakit Satış</span>
+            <span><kbd className="bg-blue-950 text-blue-300 px-1.5 py-0.5 rounded font-mono border border-blue-800">F10</kbd> Kredi Kartı</span>
+          </div>
+          <div className="text-[11px] text-slate-400 font-mono">
+            VisionX RapidPOS v2.4
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start h-full pb-10">
           
@@ -611,6 +669,27 @@ export default function PointOfSale() {
               <div className="p-6 bg-white border-t border-slate-200 grid grid-cols-2 gap-4">
                  <button onClick={() => setCompletedOrder(null)} className="py-4 font-bold text-slate-600 bg-white border border-slate-200 rounded-2xl hover:bg-slate-700 hover:text-slate-800 transition-colors shadow-inner">Ekranı Kapat</button>
                  <button onClick={printReceipt} className="py-4 font-black text-slate-900 bg-gradient-to-r from-emerald-400 to-teal-400 text-white rounded-2xl hover:brightness-110 transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2"><FileText className="w-5 h-5"/> Fiş Yazdır</button>
+               </div>
+               <div className="px-6 pb-6 bg-white grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setShowWarrantyModal(true)}
+                    className="py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition"
+                  >
+                    <Award className="w-4 h-4 text-amber-400" />
+                    Dijital Garanti Kartı
+                  </button>
+                  <button
+                    onClick={() => {
+                      const phone = selectedCustomer?.phone?.replace(/\D/g, '') || '';
+                      const msg = encodeURIComponent(`Sayın ${selectedCustomer?.name || 'Müşterimiz'}, VisionX Pro Optik fişiniz:\nFiş No: ${completedOrder?.orderNumber}\nToplam: ${completedOrder?.total} ₺\nTarih: ${completedOrder?.date}\nBizi tercih ettiğiniz için teşekkür ederiz!`);
+                      if (phone) window.open(`https://wa.me/90${phone.startsWith('0') ? phone.slice(1) : phone}?text=${msg}`, '_blank');
+                      else window.open(`https://wa.me/?text=${msg}`, '_blank');
+                    }}
+                    className="py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition"
+                  >
+                    <Share2 className="w-4 h-4 text-emerald-600" />
+                    WhatsApp Fiş Gönder
+                  </button>
               </div>
             </motion.div>
           </motion.div>
@@ -931,6 +1010,41 @@ export default function PointOfSale() {
         orderNumber={lastOrderNumber}
         alerts={complianceAlerts}
         onClose={() => setShowComplianceModal(false)}
+      />
+
+      <MedulaQueryModal
+        isOpen={showMedulaModal}
+        onClose={() => setShowMedulaModal(false)}
+        onApplyPrescription={(medula) => {
+          let cust = customersList.find(c => c.nationalId === medula.nationalId || c.phone === medula.patientPhone);
+          if (cust) {
+            setSelectedCustomer(cust);
+          } else {
+            setSelectedCustomer({
+              id: 'medula-' + medula.nationalId,
+              name: medula.patientName,
+              phone: medula.patientPhone,
+              nationalId: medula.nationalId,
+              segment: 'Standart'
+            });
+          }
+          setIsSgkActive(true);
+          setSgkAmount(medula.sgkContribution?.totalSgkAmount || 128.20);
+          toast.success(`${medula.patientName} e-Reçetesi aktarıldı! SGK İndirimi uygulandı.`);
+        }}
+      />
+
+      <DigitalWarrantyModal
+        isOpen={showWarrantyModal}
+        onClose={() => setShowWarrantyModal(false)}
+        order={{
+          orderNumber: completedOrder?.orderNumber,
+          customer: selectedCustomer?.name,
+          customerPhone: selectedCustomer?.phone,
+          date: completedOrder?.date,
+          total: completedOrder?.total,
+          salesRep: completedOrder?.salesRep,
+        }}
       />
     </div>
   );

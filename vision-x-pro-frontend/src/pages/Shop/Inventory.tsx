@@ -8,11 +8,13 @@ import {
 import toast, { Toaster } from 'react-hot-toast';
 import api from '../../lib/api';
 import { downloadCsv } from '../../utils/csvExport';
+import BulkImportModal from '../../components/BulkImportModal';
 
 export default function Inventory() {
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -146,27 +148,13 @@ export default function Inventory() {
           </div>
           
           <div className="flex gap-3 w-full md:w-auto">
-             <label className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3.5 bg-white border border-slate-200 shadow-sm rounded-2xl text-sm font-bold text-slate-700 hover:bg-slate-50 hover:shadow-md transition-all cursor-pointer">
-               <input type="file" accept=".csv" className="hidden" onChange={async (e) => {
-                 const file = e.target.files?.[0];
-                 if (!file) return;
-                 try {
-                   toast.loading('Katalog dosyası işleniyor...');
-                   const text = await file.text();
-                   const result = await api.post('/products/import', { csvContent: text });
-                   toast.dismiss();
-                   toast.success(result.message || `${file.name} içe aktarıldı.`);
-                   const data = await api.get('/products');
-                   setInventoryItems(data);
-                 } catch (err: any) {
-                   toast.dismiss();
-                   toast.error(err.message || 'İçe aktarma başarısız.');
-                 } finally {
-                   e.target.value = '';
-                 }
-               }} />
-               İçe Aktar
-             </label>
+             <button 
+                onClick={() => setIsBulkModalOpen(true)}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-50 border border-blue-200 shadow-sm rounded-2xl text-sm font-bold text-blue-700 hover:bg-blue-100 hover:shadow-md transition-all cursor-pointer"
+              >
+                <Tag className="w-4 h-4 text-blue-600" />
+                Toplu İçe Aktar (Excel/CSV)
+              </button>
              <button onClick={() => {
                downloadCsv('stok_listesi.csv',
                  ['Kategori', 'Ürün Adı', 'Barkod', 'Alış', 'Satış', 'Miktar'],
@@ -378,7 +366,8 @@ export default function Inventory() {
              </motion.div>
            )}
         </AnimatePresence>
-      </div>
+      <BulkImportModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} onSuccess={fetchInventory} />
+    </div>
 
       {/* LIGHT FLUID MODAL - Pure White Apple Style */}
       <AnimatePresence>

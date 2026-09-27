@@ -4,11 +4,13 @@ import {
   Package, Search, Filter,
   MapPin, Phone, User, Calendar, CreditCard, ChevronRight,
   Eye, Printer, Truck, CheckCircle2, Clock, AlertCircle, Focus, Image as ImageIcon,
-  RotateCcw, X, Download, Wrench, ShieldCheck
+  RotateCcw, X, Download, Wrench,
+  Share2, Award
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import api from '../../lib/api';
 import { downloadCsv } from '../../utils/csvExport';
+import DigitalWarrantyModal from '../../components/DigitalWarrantyModal';
 
 const statusConfig: any = {
   'Tamamlandı': { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
@@ -27,6 +29,7 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showWarrantyModal, setShowWarrantyModal] = useState(false);
 
   const fetchOrders = async () => {
     try {
@@ -375,19 +378,37 @@ export default function Orders() {
                        <Truck className="w-5 h-5"/> Kargoya Ver / Barkod Bas
                      </button>
                    )}
-                   <button onClick={() => {toast.success('Garanti Belgesi / Teslim Tutanağı İndiriliyor...');}} className="col-span-2 flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-slate-800 bg-slate-800 font-bold text-white hover:bg-slate-900 shadow-lg transition-all mt-2">
-                     <ShieldCheck className="w-5 h-5"/> Garanti Belgesi / Teslim Tutanağı Yazdır
+                   <button onClick={() => setShowWarrantyModal(true)} className="col-span-2 flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-slate-800 bg-slate-900 font-bold text-white hover:bg-slate-800 shadow-lg transition-all mt-2">
+                     <Award className="w-5 h-5 text-amber-400"/> Dijital Garanti & Optik Kartı (QR Kodlu)
                    </button>
-                   {(selectedOrder.status === 'Kargolandı' || selectedOrder.status === 'Teslim Edildi' || selectedOrder.status === 'İptal / İade') && (
-                     <button className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-800 font-bold text-white hover:bg-slate-900 shadow-lg shadow-slate-200 transition-all">
-                       Müşteriye Mesaj Gönder
-                     </button>
-                   )}
+                   <button 
+                     onClick={() => {
+                       const phone = selectedOrder?.phone?.replace(/\D/g, '') || '';
+                       const msg = encodeURIComponent(`Sayın ${selectedOrder?.customer || 'Müşterimiz'}, VisionX Pro Optik ${selectedOrder?.id || ''} numaralı siparişiniz güncellendi.\nDurum: ${selectedOrder?.status || ''}\nToplam: ₺${selectedOrder?.amount?.toLocaleString('tr-TR')}\nSağlıklı günlerde kullanmanızı dileriz.`);
+                       if (phone) window.open(`https://wa.me/90${phone.startsWith('0') ? phone.slice(1) : phone}?text=${msg}`, '_blank');
+                       else window.open(`https://wa.me/?text=${msg}`, '_blank');
+                     }} 
+                     className="col-span-2 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-emerald-600 font-bold text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all"
+                   >
+                     <Share2 className="w-5 h-5"/> WhatsApp ile Müşteriye Bilgi Gönder
+                   </button>
                 </div>
              </motion.div>
            </>
          )}
       </AnimatePresence>
+
+      <DigitalWarrantyModal
+        isOpen={showWarrantyModal}
+        onClose={() => setShowWarrantyModal(false)}
+        order={{
+          orderNumber: selectedOrder?.id,
+          customer: selectedOrder?.customer,
+          customerPhone: selectedOrder?.phone,
+          date: selectedOrder?.date,
+          total: selectedOrder?.amount,
+        }}
+      />
     </div>
   );
 }

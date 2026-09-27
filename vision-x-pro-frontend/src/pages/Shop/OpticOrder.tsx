@@ -3,9 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Search, Glasses, Eye, CheckCircle2, 
   ChevronRight, ArrowLeft, Printer, FileText, QrCode,
-  Shield, Sun, Droplets, Zap, Star
+  Shield, Sun, Droplets, Zap, Star,
+  HeartPulse, Award, Share2
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import MedulaQueryModal from '../../components/MedulaQueryModal';
+import DigitalWarrantyModal from '../../components/DigitalWarrantyModal';
 import api from '../../lib/api';
 
 const catalogLenses = [
@@ -52,6 +55,49 @@ export default function OpticOrder() {
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', segment: 'Standart' });
   const [search, setSearch] = useState('');
+  const [showMedulaModal, setShowMedulaModal] = useState(false);
+  const [showWarrantyModal, setShowWarrantyModal] = useState(false);
+  const [sgkCoverageAmount, setSgkCoverageAmount] = useState<number>(0);
+
+  const handleApplyMedulaPrescription = async (medula: any) => {
+    let cust = customers.find(c => c.nationalId === medula.nationalId || c.phone === medula.patientPhone);
+    if (!cust) {
+      try {
+        cust = await api.post('/customers', {
+          name: medula.patientName,
+          phone: medula.patientPhone,
+          nationalId: medula.nationalId,
+          segment: 'Standart',
+          source: 'Medula'
+        });
+        const updatedList = await api.get('/customers');
+        setCustomers(updatedList);
+        cust = updatedList.find((c: any) => c.phone === medula.patientPhone) || cust;
+      } catch {
+        cust = { id: 'temp-medula-cust', name: medula.patientName, phone: medula.patientPhone, nationalId: medula.nationalId };
+      }
+    }
+    setSelectedCustomer(cust);
+
+    const newRx = {
+      id: 'medula-' + medula.trackingNo,
+      doctorName: medula.doctorName,
+      hospitalName: medula.hospitalName,
+      right: medula.diopters.right,
+      left: medula.diopters.left,
+      addition: medula.diopters.addition,
+      prescriptionDate: new Date().toISOString(),
+    };
+    setSelectedPrescription(newRx);
+    setPrescriptions(prev => [newRx, ...prev]);
+
+    if (medula.sgkContribution?.totalSgkAmount) {
+      setSgkCoverageAmount(medula.sgkContribution.totalSgkAmount);
+    }
+
+    toast.success(medula.patientName + ' e-Reçetesi aktarıldı! Şimdi çerçeve seçiniz.');
+    setStep(2);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -249,9 +295,19 @@ export default function OpticOrder() {
                   <Search className="w-6 h-6 text-indigo-700 mr-4" />
                   <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Müşteri İsim, TC veya Telefon ile arayın..." className="bg-transparent border-none outline-none w-full text-lg font-bold text-slate-800 placeholder-slate-400" />
                   {!isAddingCustomer && (
-                     <button onClick={() => setIsAddingCustomer(true)} className="ml-4 px-6 py-3 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-colors whitespace-nowrap">
-                       Yeni Ekle
-                     </button>
+                    <div className="flex items-center gap-2 ml-4">
+                      <button 
+                        type="button" 
+                        onClick={() => setShowMedulaModal(true)} 
+                        className="px-5 py-3 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold rounded-2xl transition-colors flex items-center gap-2 whitespace-nowrap shadow-2xs"
+                      >
+                        <HeartPulse className="w-5 h-5 text-red-600" />
+                        SGK Medula e-Reçete
+                      </button>
+                      <button onClick={() => setIsAddingCustomer(true)} className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-colors whitespace-nowrap">
+                        Yeni Ekle
+                      </button>
+                    </div>
                   )}
                 </div>
                 
@@ -547,10 +603,16 @@ export default function OpticOrder() {
                            <span>Ara Toplam:</span>
                            <span>₺{orderTotal.toLocaleString('tr-TR')}</span>
                          </div>
-                         <div className="flex justify-between text-xl font-black text-slate-900 mt-2">
-                           <span>GENEL TOPLAM:</span>
-                           <span>₺{orderTotal.toLocaleString('tr-TR')}</span>
-                         </div>
+                         {sgkCoverageAmount > 0 && (
+                            <div className="flex justify-between text-sm font-bold text-red-600 mb-2 border-b border-red-100 pb-2">
+                              <span>SGK Katkı Payı:</span>
+                              <span>-₺{sgkCoverageAmount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-xl font-black text-slate-900 mt-2">
+                            <span>GENEL TOPLAM:</span>
+                            <span>₺{Math.max(0, orderTotal - sgkCoverageAmount).toLocaleString('tr-TR')}</span>
+                          </div>
                       </div>
                    </div>
 
@@ -567,9 +629,28 @@ export default function OpticOrder() {
                 <div className="w-full lg:w-80 flex flex-col gap-4 print:hidden">
                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
                       <h4 className="font-black text-slate-800 mb-4">İşlemler</h4>
-                      <button onClick={() => window.print()} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 transition-colors shadow-lg mb-3">
-                         <Printer className="w-5 h-5"/> A4 Yazdır
-                      </button>
+                      <button onClick={() => window.print()} className="w-full py-3.5 bg-slate-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 transition-colors shadow-lg mb-2 text-xs">
+                          <Printer className="w-4 h-4"/> A4 Yazdır
+                       </button>
+                       <button 
+                         type="button"
+                         onClick={() => setShowWarrantyModal(true)} 
+                         className="w-full py-3 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors shadow-sm mb-2 text-xs"
+                       >
+                          <Award className="w-4 h-4 text-amber-400"/> Dijital Garanti & Optik Kartı
+                       </button>
+                       <button 
+                         type="button"
+                         onClick={() => {
+                           const phone = selectedCustomer?.phone?.replace(/\D/g, '') || '';
+                           const msg = encodeURIComponent(`Sayın ${selectedCustomer?.name || ''}, VisionX Pro Optik siparişiniz oluşturuldu.\nToplam: ₺${orderTotal.toLocaleString('tr-TR')}\nMontaj tamamlandığında SMS/WhatsApp ile bilgilendirileceksiniz.`);
+                           if (phone) window.open(`https://wa.me/90${phone.startsWith('0') ? phone.slice(1) : phone}?text=${msg}`, '_blank');
+                           else window.open(`https://wa.me/?text=${msg}`, '_blank');
+                         }}
+                         className="w-full py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors shadow-sm mb-3 text-xs"
+                       >
+                          <Share2 className="w-4 h-4 text-emerald-600"/> WhatsApp Bilgilendirme
+                       </button>
                       <button
                         disabled={isSubmitting}
                         onClick={submitOrder}
@@ -606,6 +687,26 @@ export default function OpticOrder() {
            </button>
          ) : null}
       </div>
+
+      <MedulaQueryModal 
+        isOpen={showMedulaModal} 
+        onClose={() => setShowMedulaModal(false)} 
+        onApplyPrescription={handleApplyMedulaPrescription} 
+      />
+
+      <DigitalWarrantyModal
+        isOpen={showWarrantyModal}
+        onClose={() => setShowWarrantyModal(false)}
+        order={{
+          customer: selectedCustomer?.name,
+          customerPhone: selectedCustomer?.phone,
+          frameName: selectedFrame?.name,
+          lensDetails: selectedLens,
+          prescription: selectedPrescription,
+          salesRep: salesRep,
+          total: orderTotal
+        }}
+      />
     </div>
   );
 }
